@@ -44,7 +44,7 @@ Part frame = Body origin. Sketch coordinates on origin planes:
 | `Part(name, material="PETG"\|"PLA")` | new document: `Params` sheet, `App::Part` `<name>`, `Body` |
 | `part.params(name=value, ...)` | value: number (mm), a param/expression, or `{"value", "min", "max", "unit"}`; returns `p.<name>` |
 | `part.datum(name, plane="XY", offset=0)` | datum plane offset along the plane normal |
-| `part.datum(name, origin=(x,y,z), z=(..), x=(..))` | datum frame (origin bound to params, orientation fixed) |
+| `part.datum(name, origin=(x,y,z), z=(..), x=(..))` or `rot=(yaw, pitch, roll)` | datum frame; origin and orientation bound to params (`<name>_o_x`..., `<name>_yaw`/`_pitch`/`_roll` in deg; zero components stay literal) |
 | `part.sketch(name, on="XY"\|datum)` | sketch; returns a `Sketch` |
 | `sketch.rect(w, h, center=(0,0))` | axis-aligned rectangle |
 | `sketch.circle(d, center=(0,0))` / `sketch.circles(d, [pts])` | circle / equal circles |
@@ -53,9 +53,9 @@ Part frame = Body origin. Sketch coordinates on origin planes:
 | `part.pad(sketch, length, reverse=False, symmetric=False)` | extrusion |
 | `part.pocket(sketch, depth=… \| through=True, symmetric=False)` | cut |
 | `part.hole(on, at, d=None, fit="clearance", depth=None, horizontal=False, name=None)` | hole(s); diameter from the print profile: `fit` = `clearance`/`press`/`close` (d + allowance) or `clearance_m3`/`tap_m3`/... (d ignored); `horizontal=True` adds the horizontal-hole allowance; through both ways unless `depth` |
-| `part.connector(name, origin, z, x, label)` | `App::LocalCoordinateSystem`; joints mate connector frames (z = joint axis) |
-| `part.mount(component, at=connector)` | seats a plan component (or card id) with its card frame on the connector: body pocket (+ clearance), tapped mounting holes, keep-out cuts. Card dims become `<component>_<param>` aliases |
-| `part.cable_channel(start, end, d)` | straight round channel between two part-frame points |
+| `part.connector(name, origin, z, x, label)` or `rot=(yaw, pitch, roll)` | `App::LocalCoordinateSystem`; joints mate connector frames (z = joint axis); origin + orientation bound like `datum`. `rot` angles: numbers or params with unit `deg`; R = Rz(yaw)·Ry(pitch)·Rx(roll) |
+| `part.mount(component, at=connector)` | seats a plan component (or card id) with its card frame on the connector: body pocket (+ clearance), tapped mounting holes, keep-out cuts. Card dims become `<component>_<param>` aliases; the cuts move and turn with the connector's params |
+| `part.cable_channel(start, end, d)` | straight round channel between two part-frame points; editing either end moves and turns it |
 
 Not in v0 yet: `mate_to` (horn interface, needs card horn data, T1.4), `electronics_bay` (T1.4),
 pack composites such as `servo_u_bracket` (T1.10).

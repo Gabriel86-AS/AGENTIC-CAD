@@ -7,6 +7,9 @@
 Every length the program passes (number, plan param or Q expression) ends up as an expression of a
 Params alias; literals are promoted to aliases named after the call (`source = literal`).
 Frames (`frame=` datums, connectors, mount frames) are relative to the Body origin = part frame.
+A frame is one whole-Placement expression (D28, probed 2026-10-09):
+    placement(vector(x; y; z); rotationz(yaw) * rotationy(pitch) * rotationx(roll))
+so origin and orientation both follow Params; per-component Yaw/Pitch/Roll bindings fight at gimbal lock.
 Origin planes (probed 2026-10-09): XY sketch (x, y) -> (X, Y), normal +Z; XZ -> (X, Z), normal -Y;
 YZ -> (Y, Z), normal +X. Pad grows along the sketch normal, Pocket cuts against it.
 """
@@ -68,6 +71,21 @@ def _rotation(z, x):
         raise SDKError("sdk", "z %s and x %s are not orthogonal" % (tuple(z), tuple(x)),
                        action="pass x perpendicular to z")
     return App.Rotation(x, z.cross(x), z, "ZXY")
+
+
+def _is_zero(v):
+    return is_num(v) and v == 0
+
+
+def _frame_expr(o, angles):
+    """Placement expression for origin o (0|Q x3, mm) and yaw/pitch/roll angles (0|Q x3, deg)."""
+    vec = "; ".join(c.expr if isinstance(c, Q) else "0 mm" for c in o)
+    rot = " * ".join("rotation%s(%s)" % (ax, a.expr) for ax, a in zip("zyx", angles) if isinstance(a, Q))
+    return "placement(vector(%s); %s)" % (vec, rot or "rotationz(0 deg)")
+
+
+def _frame_placement(o, angles):
+    return App.Placement(App.Vector(*[float(c) for c in o]), App.Rotation(*[float(a) for a in angles]))
 
 
 class ParamSet:
@@ -203,27 +221,48 @@ class Part:
         return Q(self.params_info[alias]["value"], "Params." + alias)
 
     # ---- datums ----------------------------------------------------------------------------
-    def _frame_datum(self, name, origin, rot):
-        """PartDesign::Plane on the XY origin plane with AttachmentOffset = (origin, rot); origin parts bound."""
+    def _frame_datum(self, name, frame):
+        """PartDesign::Plane on the XY origin plane; AttachmentOffset = frame (origin + orientation bound)."""
+        o, angles = frame
         pl = self.body.newObject("PartDesign::Plane", name)
         pl.AttachmentSupport = [(self._origin("XY_Plane"), "")]
         pl.MapMode = "FlatFace"
-        pl.AttachmentOffset = App.Placement(App.Vector(*[float(c) for c in origin]), rot)
-        for axis, c in zip("xyz", origin):
-            if isinstance(c, Q):
-                pl.setExpression(".AttachmentOffset.Base." + axis, c.expr)
+        pl.AttachmentOffset = _frame_placement(o, angles)
+        pl.setExpression(".AttachmentOffset", _frame_expr(o, angles))
         return pl
 
     def _point(self, p, hint):
-        return tuple(0 if (is_num(c) and c == 0) else self._q(c, "%s_%s" % (hint, a)) for a, c in zip("xyz", p))
+        return tuple(0 if _is_zero(c) else self._q(c, "%s_%s" % (hint, a)) for a, c in zip("xyz", p))
 
-    def datum(self, name=None, plane="XY", offset=0, origin=None, z=None, x=None):
-        """Datum plane: `plane` + `offset` along its normal, or a full frame (`origin`, `z`, `x`).
-        A sketch on it has its x along the datum x and its normal along the datum z."""
+    def _angles(self, hint, z=None, x=None, rot=None):
+        """Frame orientation as yaw/pitch/roll (0|Q deg), from `rot` = (yaw, pitch, roll) in degrees
+        (numbers or deg params) or from the `z`/`x` axes; non-zero literals become `<hint>_yaw` ... aliases."""
+        if rot is not None:
+            if z is not None or x is not None:
+                raise SDKError("sdk", "%s: pass either rot=(yaw, pitch, roll) or z=/x=, not both" % hint)
+            if len(rot) != 3:
+                raise SDKError("sdk", "%s: rot must be (yaw, pitch, roll) in degrees" % hint)
+            ypr = rot
+        else:
+            ypr = [round(a, 9) for a in _rotation(z or (0, 0, 1), x or (1, 0, 0)).toEulerAngles("YawPitchRoll")]
+        out = []
+        for k, a in zip(("yaw", "pitch", "roll"), ypr):
+            if isinstance(a, Q) and a.unit != "deg":
+                raise SDKError("sdk", "%s: %s must be in deg, got %r" % (hint, k, a),
+                               action="define the param with unit 'deg'")
+            out.append(0 if _is_zero(a) else self._q(a, "%s_%s" % (hint, k), unit="deg"))
+        return tuple(out)
+
+    def _frame(self, hint, origin, z=None, x=None, rot=None):
+        """(origin, angles) with every non-zero component a Q bound to Params."""
+        return self._point(origin, hint + "_o"), self._angles(hint, z, x, rot)
+
+    def datum(self, name=None, plane="XY", offset=0, origin=None, z=None, x=None, rot=None):
+        """Datum plane: `plane` + `offset` along its normal, or a full frame (`origin` + `z`/`x` axes or
+        `rot` = (yaw, pitch, roll) deg). A sketch on it has its x along the datum x, its normal along z."""
         name = self._new_name(name, "datum")
-        if origin is not None or z is not None or x is not None:
-            o = self._point(origin or (0, 0, 0), name + "_o")
-            pl = self._frame_datum(name, o, _rotation(z or (0, 0, 1), x or (1, 0, 0)))
+        if origin is not None or z is not None or x is not None or rot is not None:
+            pl = self._frame_datum(name, self._frame(name, origin or (0, 0, 0), z, x, rot))
             d = Datum(name, pl)
         else:
             if plane not in PLANES:
@@ -333,19 +372,20 @@ class Part:
         return self.pocket(s, depth=depth, name=name + "_cut")
 
     # ---- connectors ------------------------------------------------------------------------
-    def connector(self, name, origin, z, x, label):
-        """App::LocalCoordinateSystem in the part frame; origin bound to Params (D13 mating frames)."""
+    def connector(self, name, origin, z=None, x=None, label=None, rot=None):
+        """App::LocalCoordinateSystem in the part frame (D13 mating frames); orientation from the `z`/`x`
+        axes or `rot` = (yaw, pitch, roll) deg. Origin and orientation are bound to Params."""
+        if label is None:
+            raise SDKError("sdk", "connector %s: label is required" % name)
+        if rot is None and (z is None or x is None):
+            raise SDKError("sdk", "connector %s: pass z= and x= axes, or rot=(yaw, pitch, roll)" % name)
         name = self._new_name(name, "connector")
-        rot = _rotation(z, x)
-        o = self._point(origin, name + "_o")
+        frame = self._frame(name, origin, z, x, rot)
         lcs = self.container.newObject("App::LocalCoordinateSystem", name)
-        lcs.Placement = App.Placement(App.Vector(*[float(c) for c in o]), rot)
-        for axis, c in zip("xyz", o):
-            if isinstance(c, Q):
-                lcs.setExpression(".Placement.Base." + axis, c.expr)
+        lcs.Placement = _frame_placement(*frame)
+        lcs.setExpression(".Placement", _frame_expr(*frame))
         lcs.addProperty("App::PropertyString", "ConnectorLabel", "AgenticCAD").ConnectorLabel = label
-        self.connectors[name] = {"o": o, "z": tuple(rot.multVec(App.Vector(0, 0, 1))),
-                                 "x": tuple(rot.multVec(App.Vector(1, 0, 0))), "label": label, "obj": lcs}
+        self.connectors[name] = {"frame": frame, "label": label, "obj": lcs}
         return lcs
 
     # ---- components ------------------------------------------------------------------------
@@ -374,13 +414,15 @@ class Part:
             return -q if neg else q
         return 0 if v == 0 else self._q(v, "%s_lit" % prefix, source="card:" + card["id"])
 
-    def _local_datum(self, name, conn, z_local):
-        """Frame datum = connector frame translated by z_local along its own z (z_local: 0 or Q)."""
-        o, z = conn["o"], conn["z"]
-        if not (is_num(z_local) and z_local == 0):
-            o = tuple(_add_scaled(c, zc, z_local) for c, zc in zip(o, z))
-        rot = _rotation(conn["z"], conn["x"])
-        d = Datum(name, self._frame_datum(self._new_name(name, "datum"), o, rot))
+    def _offset_datum(self, name, base, z_local):
+        """Datum plane = frame of datum `base` moved by z_local (Q) along its own z (local AttachmentOffset)."""
+        pl = self.body.newObject("PartDesign::Plane", self._new_name(name, "datum"))
+        pl.AttachmentSupport = [(base.obj, "")]
+        pl.MapMode = "FlatFace"
+        if not _is_zero(z_local):
+            pl.AttachmentOffset = App.Placement(App.Vector(0, 0, float(z_local)), App.Rotation())
+            pl.setExpression(".AttachmentOffset.Base.z", z_local.expr)
+        d = Datum(name, pl)
         self.datums[name] = d
         return d
 
@@ -397,7 +439,8 @@ class Part:
         itf = card.get("interfaces", {})
         clr = self._profile_q("fit_clearance", self.profile["fits"]["clearance"])
         cq = lambda v: self._card_q(card, prefix, v)
-        frame = self._local_datum(name + "_frame", conn, 0)
+        frame = Datum(name + "_frame", self._frame_datum(self._new_name(name + "_frame", "datum"), conn["frame"]))
+        self.datums[frame.name] = frame
         made = []
 
         pk = itf.get("mount_pocket")
@@ -431,28 +474,32 @@ class Part:
                 size = [cq(v) for v in ko["size"]]
                 centre = [cq(v) for v in ko.get("centre_xy", (0, 0))]
                 top = _plus(cq(ko.get("bottom_z", 0)), size[2])
-            d = self._local_datum("%s_keep_out%d_frame" % (name, k), conn, top)
+            d = self._offset_datum("%s_keep_out%d_frame" % (name, k), frame, top)
             s = self.sketch("%s_keep_out%d_sketch" % (name, k), on=d)
             s.rect(size[0], size[1], center=tuple(centre), name="box")
             made.append(self.pocket(s, depth=size[2], name="%s_keep_out%d" % (name, k)))
         return made
 
     def cable_channel(self, start, end, d, name=None):
-        """Straight round channel of diameter d from `start` to `end` (part frame). The direction is fixed
-        at build time; the start point, length and diameter stay bound to Params. Min wall: gate L7."""
+        """Straight round channel of diameter d from `start` to `end` (part frame). Start, end and d are
+        bound to Params: editing either end moves, turns and resizes the channel. Min wall: gate L7."""
         name = self._new_name(name, "channel")
         s3, e3 = self._point(start, name + "_start"), self._point(end, name + "_end")
         diff = [_minus(b, a) for a, b in zip(s3, e3)]
-        vec = App.Vector(*[float(c) for c in diff])
-        if vec.Length < 1e-6:
+        dx, dy, dz = (float(c) for c in diff)
+        length_v = math.sqrt(dx * dx + dy * dy + dz * dz)
+        if length_v < 1e-6:
             raise SDKError("sdk", "cable_channel %s: start and end coincide" % name, location=name)
-        zdir = -vec.normalize()  # pocket cuts against the datum normal, i.e. toward `end`
-        xdir = zdir.cross(App.Vector(0, 0, 1)) if abs(zdir.z) < 0.9 else zdir.cross(App.Vector(1, 0, 0))
-        d_frame = Datum(name + "_frame", self._frame_datum(self._new_name(name + "_frame", "datum"), s3,
-                                                            _rotation(zdir, xdir.normalize())))
-        self.datums[d_frame.name] = d_frame
-        terms = ["(%s) ^ 2" % c.expr for c in diff if isinstance(c, Q)]
-        length = Q(vec.Length, "sqrt(%s)" % " + ".join(terms)) if terms else self._q(vec.Length, name + "_length")
+        # datum z = -(end - start)/L, so the pocket (cutting against z) runs toward `end`:
+        # z = Rz(yaw)·Ry(pitch)·ẑ = (cos yaw sin pitch, sin yaw sin pitch, cos pitch)
+        dxe, dye, dze = ("(%s)" % c.expr if isinstance(c, Q) else "(0 mm)" for c in diff)
+        length = Q(length_v, "sqrt(%s ^ 2 + %s ^ 2 + %s ^ 2)" % (dxe, dye, dze))
+        yaw = Q(math.degrees(math.atan2(-dy, -dx)), "atan2(-%s; -%s)" % (dye, dxe), "deg")
+        pitch = Q(math.degrees(math.acos(max(-1.0, min(1.0, -dz / length_v)))),
+                  "acos(-%s / %s)" % (dze, length.expr), "deg")
+        frame_name = self._new_name(name + "_frame", "datum")
+        d_frame = Datum(frame_name, self._frame_datum(frame_name, (s3, (yaw, pitch, 0))))
+        self.datums[frame_name] = d_frame
         s = self.sketch(name + "_sketch", on=d_frame)
         s.circle(d, name="bore")
         return self.pocket(s, depth=length, name=name + "_cut")
@@ -507,10 +554,12 @@ class Part:
             "params": {a: dict(i, current=_cell_value(self.sheet, a)) for a, i in self.params_info.items()},
         }
 
-    def set_param(self, alias, value, unit="mm"):
-        """Change a Params cell (tests, flex checks); call report() or doc.recompute() afterwards."""
+    def set_param(self, alias, value, unit=None):
+        """Change a Params cell (tests, flex checks; unit defaults to the param's own);
+        call report() or doc.recompute() afterwards."""
         if alias not in self.params_info:
             raise SDKError("sdk", "no param %r" % alias)
+        unit = self.params_info[alias]["unit"] if unit is None else unit
         u = "" if unit in ("", "-") else " " + unit
         self.sheet.set(self.sheet.getCellFromAlias(alias), "=%s%s" % (fmt(value), u))
 
@@ -546,10 +595,3 @@ def _half_sum(a, b):
         return (a + b) / 2
     return _plus(a, b) / 2 if not (is_num(b) and b == 0) else a / 2
 
-
-def _add_scaled(c, k, q):
-    """c + k * q for a connector origin component c (0 or Q), constant k, Q q; drops zero terms."""
-    if abs(k) < 1e-12:
-        return c
-    term = q * k if abs(k - 1) > 1e-12 else q
-    return _plus(c, term)

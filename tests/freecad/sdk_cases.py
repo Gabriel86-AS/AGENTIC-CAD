@@ -65,7 +65,12 @@ def datum():
     part.pad(part.sketch("fin", on=side).rect(6, 6, center=(0, 5)), 2)
     tilt = part.datum("tilt", origin=(20, 0, 5), z=(1, 0, 0), x=(0, 1, 0))
     part.pad(part.sketch("knob", on=tilt).circle(4), 3)
-    return run(part, {"thick": 12, "side_offset": 19, "tilt_o_x": 19})
+    out = run(part, {"thick": 12, "side_offset": 19, "tilt_o_x": 19})
+    part.set_param("tilt_yaw", 180)
+    part.doc.recompute()
+    out["tilt_z"] = list(part.datums["tilt"].obj.Placement.Rotation.multVec(App.Vector(0, 0, 1)))
+    out["tilt_angles"] = {k: v for k, v in part.params_info.items() if k.startswith("tilt_") and v["unit"] == "deg"}
+    return out
 
 
 @case
@@ -121,7 +126,8 @@ def connector():
     part, p = plate("connector_case", length=40)
     part.connector("tip", origin=(p.length, 0, p.thick), z=(0, 1, 0), x=(1, 0, 0), label="tool")
     part.connector("bottom", origin=(0, 0, 0), z=(0, 0, -1), x=(1, 0, 0), label="mount")
-    return run(part, {"length": 55, "thick": 8})
+    part.connector("side", origin=(0, 20, 5), rot=(90, 0, 0), label="cable")
+    return run(part, {"length": 55, "thick": 8, "tip_roll": -45, "side_yaw": 180})
 
 
 def servo_block(name):
@@ -149,11 +155,25 @@ def mount_plan_component():
 
 
 @case
+def mount_rotated():
+    """Servo seated on a side connector; turning the connector by its Params turns every cut."""
+    part, p = plate("mount_rot_case", w=80, d=80, t=40, mx=40, my=0)
+    part.connector("side_mount", origin=(p.mx, p.my, 20), z=(1, 0, 0), x=(0, 1, 0), label="servo_mount")
+    part.mount("servo/mg996r", at="side_mount")
+    return run(part, {"side_mount_yaw": 180, "mx": 0, "my": 40})
+
+
+@case
 def cable_channel():
     part = Part("channel_case")
     part.pad(part.sketch("sk", on="XY").rect(100, 20), 20)
     part.cable_channel((-40, 0, 10), (40, 0, 10), 6)
-    return run(part, {"channel0_start_x": -30})
+    out = run(part, {"channel0_start_x": -30})
+    part.set_param("channel0_start_x", -40)
+    part.set_param("channel0_end_z", 14)  # turns the channel: direction follows the end points
+    out["tilted_gates"] = part.report()["gates"]
+    out["m2"] = measure(part)
+    return out
 
 
 @case

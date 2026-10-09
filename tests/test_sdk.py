@@ -61,6 +61,9 @@ def test_datum_offsets_and_frames(cases):
     assert (z1, y0, x1) == pytest.approx((10 + 4, -22, 23))      # boss on top; XZ normal is -Y; frame datum at x=20
     x0, y0, z0, x1, y1, z1 = c["m1"]["bbox"]
     assert (z1, y0, x1) == pytest.approx((12 + 4, -21, 22))
+    # orientation is bound too: z=(1,0,0), x=(0,1,0) -> yaw 90, roll 90 (pitch 0 stays a literal)
+    assert sorted(c["tilt_angles"]) == ["tilt_roll", "tilt_yaw"]
+    assert c["tilt_z"] == pytest.approx([0, 1, 0], abs=1e-9)  # yaw 90 -> 180 turns the datum normal
 
 
 def test_rect(cases):
@@ -125,6 +128,12 @@ def test_connector(cases):
     assert tip["x"] == pytest.approx([1, 0, 0]) and tip["label"] == "tool"
     assert c["after_connectors"]["tip"]["o"] == pytest.approx([55, 0, 8])
     assert c["report"]["connectors"]["bottom"]["z"] == pytest.approx([0, 0, -1])
+    s = math.sqrt(0.5)
+    after = c["after_connectors"]
+    assert after["tip"]["z"] == pytest.approx([0, s, s]) and after["tip"]["x"] == pytest.approx([1, 0, 0])
+    assert c["report"]["connectors"]["side"]["x"] == pytest.approx([0, 1, 0], abs=1e-9)  # rot=(90, 0, 0)
+    assert after["side"]["x"] == pytest.approx([-1, 0, 0], abs=1e-9)
+    assert after["side"]["z"] == pytest.approx([0, 0, 1], abs=1e-9)
 
 
 def _mount_removed(p, clr, tap, body_l=None):
@@ -156,11 +165,24 @@ def test_mount_plan_component_follows_connector(cases):
     assert vol(c, "m1") == pytest.approx(80 * 40 * 45 - removed)  # cuts move with the connector
 
 
+def test_mount_turns_with_connector(cases):
+    c = get(cases, "mount_rotated")
+    assert_sound(c)
+    p = load_card("servo/mg996r")["params_mm"]
+    removed = _mount_removed(p, PROFILE["fits"]["clearance"], PROFILE["screws"]["M4"]["tap"])
+    assert vol(c) == pytest.approx(80 * 80 * 40 - removed)
+    assert vol(c, "m1") == pytest.approx(80 * 80 * 40 - removed)  # same cuts, now on the +y face
+    side = c["after_connectors"]["side_mount"]
+    assert side["o"] == pytest.approx([0, 40, 20]) and side["z"] == pytest.approx([0, 1, 0], abs=1e-9)
+
+
 def test_cable_channel(cases):
     c = get(cases, "cable_channel")
     assert_sound(c)
     assert vol(c) == pytest.approx(100 * 20 * 20 - math.pi * 9 * 80)
     assert vol(c, "m1") == pytest.approx(100 * 20 * 20 - math.pi * 9 * 70)
+    assert all(c["tilted_gates"].values())
+    assert vol(c, "m2") == pytest.approx(100 * 20 * 20 - math.pi * 9 * math.hypot(80, 4))  # end z 10 -> 14
 
 
 def test_save_reopen_keeps_expressions(cases):
