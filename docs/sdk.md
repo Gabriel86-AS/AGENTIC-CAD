@@ -17,6 +17,9 @@ def build(P):
 ```
 
 ## Rules the SDK enforces
+- Gate L0 (before anything runs): imports only `agenticcad` and `math`; no `open`/`exec`/`eval`/
+  `getattr`/`__import__`, no FreeCAD modules, no `_private` attributes or raw FreeCAD handles
+  (`.doc`, `.body`, `.sheet`, `.obj`); a top-level `def build(P)`.
 - Every length becomes an expression of a `Params` spreadsheet alias. Literals are promoted to
   aliases named after the call (`<sketch>_<shape>_<dim>`), so the `.FCStd` stays editable.
 - Arithmetic on params: `p.length / 2`, `p.width + 3`, `-p.x` (multiply/divide by plain numbers only).
@@ -80,3 +83,31 @@ Cards with `verified: false` hold nominal values; the checkpoint shows them for 
 `part.report()` recomputes and returns gates `L1_no_invalid`, `L2_sketches` (solve 0, DoF 0, every
 dimension bound), `L3_one_solid`, plus sketches, connectors, params, volume, bounding box and
 `signals` (`failure` / `warning` / `info`, worker format). `part.save(path)` writes the `.FCStd`.
+
+## Tools: compile_part and probe_part
+`compile_part()` runs L0, builds the part in FreeCAD (L1), checks every sketch (L2) and the solid
+(L3), then checks the plan: each plan connector exists within 0.01 mm of its declared pose with its
+label, and the bounding box is within ±20 % of the plan's `bbox_mm`. It answers with one status
+line and up to 8 signals, failures first:
+
+```
+compile_part: FAIL (1 failure) - volume 11357.5 mm3, bbox 100.0 x 20.0 x 6.0 mm, 1 connectors, ...
+- FAILURE L3: connector 'tip' is at o=[80.0, 0.0, 6.0] ...; the plan declares o=[80.0, 0.0, 0.0] ... | at connector tip | fix: ...
+```
+
+plus `volume_mm3`, `bbox`, `connectors`, `params` (alias names) and sketch DoF. Locations name the
+program line (`parts/link.py:7`) when the error is raised there.
+
+`probe_part(snippet)` measures the last compiled model, read-only. The snippet may use `probe` and
+`math`; the value of its last expression is returned:
+
+| `probe.` | Returns |
+|---|---|
+| `bbox()` | `{min, max, size}` |
+| `volume()`, `area()`, `com()` | mm³, mm², centre of mass |
+| `connectors()`, `connector(name)` | `{o, z, x, label}` |
+| `params()`, `param(name)` | Params values (mm / deg) and sources |
+| `sketches()`, `features()` | DoF per sketch; feature types and states |
+| `inside(p)`, `distance(p)` | point in material?; distance to the surface |
+| `segments(p0, p1)` | parts of the segment inside material, `[[t0, t1], ...]` mm from p0 |
+| `thickness(p, direction)` | material thickness through p along ±direction (wall checks) |

@@ -3,7 +3,8 @@
 PartWorkspace is the restricted action space of one part agent (plan §3.4):
   read_file     own part file + read-only roots (SDK docs, cards, plan excerpt)
   write_file    ONLY parts/<own>.py; anything else raises ToolDenied
-  compile_part  runs parts/<own>.py in the FreeCAD worker and returns its signals
+  compile_part  gates L0-L3 on parts/<own>.py (harness/tools.py) and returns formatted feedback
+  probe_part    read-only measurement snippet against the last compiled model
 The path checks live here, not in the backends, so both backends enforce the same rule.
 """
 import json
@@ -11,7 +12,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from harness.run import run_request
+from harness import tools as harness_tools
+from schemas.plan import AssemblyPlan
 
 MAX_WRITE_BYTES = 200_000
 
@@ -43,12 +45,15 @@ class PartWorkspace:
     part: str
     read_roots: list[Path] = field(default_factory=list)
     timeout_s: float = 60.0
+    plan: AssemblyPlan | None = None  # params, components and this part's PartSpec for the gates
     log: list[dict] = field(default_factory=list)  # every call, allowed or not (trace + tests)
 
     def __post_init__(self):
         self.root = Path(self.root).resolve()
         self.own = (self.root / "parts" / f"{self.part}.py").resolve()
         self.read_roots = [Path(r).resolve() for r in self.read_roots]
+        self.io = self.root / "io" / self.part
+        self.fcstd = self.root / "build" / f"{self.part}.FCStd"
 
     def _resolve(self, path: str) -> Path:
         p = Path(path)
@@ -85,11 +90,18 @@ class PartWorkspace:
         if not self.own.exists():
             self._record("compile_part", args, "denied")
             raise ToolDenied(f"parts/{self.part}.py does not exist yet; write it first")
-        res = run_request({"op": "run_script", "script": str(self.own), "timeout_s": self.timeout_s},
-                          self.root / "io" / self.part, timeout_s=self.timeout_s)
+        res = harness_tools.compile_part(self.own, self.io, out=self.fcstd, part=self.part, plan=self.plan,
+                                         timeout_s=self.timeout_s)
         self._record("compile_part", args, "ok" if res.ok else "failure")
-        return {"ok": res.ok, "signals": [s.model_dump() for s in res.signals], "result": res.result,
-                "freecad_version": res.freecad_version, "elapsed_s": res.elapsed_s}
+        return res.for_agent()
+
+    def probe_part(self, args: dict) -> dict:
+        if not self.fcstd.exists():
+            self._record("probe_part", args, "denied")
+            raise ToolDenied("no compiled model to probe; call compile_part first (it must get past L0/L1)")
+        res = harness_tools.probe_part(self.fcstd, args["snippet"], self.io)
+        self._record("probe_part", args, "ok" if res.ok else "failure")
+        return res.for_agent()
 
     def tools(self) -> list[ToolSpec]:
         return [
@@ -101,7 +113,16 @@ class PartWorkspace:
                      {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
                       "required": ["path", "content"]},
                      self.write_file),
-            ToolSpec("compile_part", f"Run parts/{self.part}.py in the FreeCAD worker and return its result and "
-                                     "failure/warning/info signals.",
+            ToolSpec("compile_part", f"Check and build parts/{self.part}.py: static check (L0), FreeCAD build (L1), "
+                                     "sketches fully constrained and bound to Params (L2), one valid solid and plan "
+                                     "connectors at their declared poses (L3). Returns PASS/FAIL feedback with "
+                                     "cause, location and fix for each signal, plus volume, bbox, connectors, params.",
                      {"type": "object", "properties": {}}, self.compile_part),
+            ToolSpec("probe_part", "Measure the last compiled model (read-only). `snippet` is Python using the "
+                                   "`probe` object and `math`; the value of its last expression is returned. "
+                                   "probe: bbox(), volume(), area(), com(), connectors(), connector(name), "
+                                   "params(), param(name), sketches(), features(), inside(p), distance(p), "
+                                   "segments(p0, p1), thickness(p, direction), help(). Points in mm, part frame.",
+                     {"type": "object", "properties": {"snippet": {"type": "string"}}, "required": ["snippet"]},
+                     self.probe_part),
         ]

@@ -10,7 +10,8 @@ from llm.agent_sdk_backend import AgentSDKBackend, make_guard, mcp_name
 from llm.claude_api_backend import ClaudeAPIBackend
 from llm.tools import PartWorkspace
 
-BOX = "import Part\nresult['volume'] = Part.makeBox(10, 20, 30).Volume\nresult['pass'] = True\n"
+BOX = ("from agenticcad import Part\n\ndef build(P):\n    part = Part('upper_arm')\n"
+       "    part.pad(part.sketch('base', on='XY').rect(10, 20), 30)\n    return part\n")
 
 
 @pytest.fixture
@@ -60,7 +61,21 @@ def test_compile_part_runs_in_worker(ws):
     ws.write_file({"path": "parts/upper_arm.py", "content": BOX})
     text, is_error = ws.tools()[2].call({})
     out = json.loads(text)
-    assert not is_error and out["ok"] and out["result"]["volume"] == pytest.approx(6000.0)
+    assert not is_error and out["ok"] and out["volume_mm3"] == pytest.approx(6000.0), out
+    assert out["feedback"].startswith("compile_part: PASS")
+    text, is_error = ws.tools()[3].call({"snippet": "probe.bbox()['size']"})
+    assert not is_error and json.loads(text)["value"] == pytest.approx([10, 20, 30])
+
+
+def test_probe_before_compile_is_denied(ws):
+    text, is_error = ws.tools()[3].call({"snippet": "probe.volume()"})
+    assert is_error and "compile_part first" in json.loads(text)["detail"]
+
+
+def test_compile_part_l0_feedback_reaches_model(ws):
+    ws.write_file({"path": "parts/upper_arm.py", "content": "import os\n" + BOX})
+    out = json.loads(ws.tools()[2].call({})[0])
+    assert out["ok"] is False and "FAILURE L0: import of 'os' is not allowed" in out["feedback"]
 
 
 def test_agent_sdk_options_disable_builtins(ws):
@@ -110,7 +125,7 @@ def test_claude_api_backend_tool_loop_offline(ws):
     assert res.error is None and res.final_text == "done" and res.turns == 4
     assert [(c.name, c.is_error) for c in res.tool_calls] == [
         ("write_file", False), ("write_file", True), ("compile_part", False)]
-    assert {t["name"] for t in sent[0]["tools"]} == {"read_file", "write_file", "compile_part"}
+    assert {t["name"] for t in sent[0]["tools"]} == {"read_file", "write_file", "compile_part", "probe_part"}
     # the denial reached the model as an error tool_result
     denial = [b for m in sent[2]["messages"] if m["role"] == "user" and isinstance(m["content"], list)
               for b in m["content"] if b.get("type") == "tool_result" and b.get("tool_use_id") == "t2"]

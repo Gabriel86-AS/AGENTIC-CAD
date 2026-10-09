@@ -67,14 +67,22 @@ def op_run_script(req, res):
 
 
 def op_compile_part(req, res):
-    # Real implementation arrives with the SDK in P1.
-    res["signals"].append(_signal("failure", "harness", "compile_part not implemented yet", action="P1"))
+    """Run parts/<name>.py through the SDK and report gates L1-L3 (harness/part_ops.py)."""
+    from harness.part_ops import compile_part
+    compile_part(req, res)
+
+
+def op_probe_part(req, res):
+    """Read-only measurement snippet against a compiled .FCStd (harness/part_ops.py)."""
+    from harness.part_ops import probe_part
+    probe_part(req, res)
 
 
 OPS = {
     "ping": op_ping,
     "run_script": op_run_script,
     "compile_part": op_compile_part,
+    "probe_part": op_probe_part,
 }
 
 
