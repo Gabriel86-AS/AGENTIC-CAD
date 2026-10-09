@@ -19,12 +19,11 @@ import os
 
 import FreeCAD as App
 import JointObject
-import Part as OCC
 import UtilsAssembly
 
-from assembly.kinematics import GATE, Tree, frame, identity, mul, residual
-from components.card import connectors as card_connectors
-from components.card import load_card, resolve
+from assembly import owners as O
+from assembly.kinematics import GATE, Tree, mul, residual
+from assembly.owners import to_matrix, to_placement
 
 POS_TOL_MM = 1e-4
 ROT_TOL_DEG = 1e-4
@@ -34,55 +33,6 @@ WB_TYPE = {"fixed": "Fixed", "revolute": "Revolute", "continuous": "Revolute", "
 
 def _signal(level, cause, location="", action=""):
     return {"level": level, "gate": GATE, "cause": cause, "location": location, "action": action}
-
-
-def to_matrix(plc):
-    m = plc.toMatrix()
-    return [[m.A11, m.A12, m.A13, m.A14], [m.A21, m.A22, m.A23, m.A24],
-            [m.A31, m.A32, m.A33, m.A34], [0.0, 0.0, 0.0, 1.0]]
-
-
-def to_placement(t):
-    m = App.Matrix(*[t[i][j] for i in range(4) for j in range(4)])
-    return App.Placement(m)
-
-
-def _container(doc):
-    parts = [o for o in doc.Objects if o.TypeId == "App::Part"]
-    return parts[0] if len(parts) == 1 else None
-
-
-def _lcs_frames(container):
-    return {o.Name: to_matrix(o.Placement) for o in container.Group
-            if o.TypeId == "App::LocalCoordinateSystem"}
-
-
-def _is_identity(t, tol=1e-9):
-    i = identity()
-    return all(abs(t[r][c] - i[r][c]) < tol for r in range(4) for c in range(4))
-
-
-def _envelope(asm, cid, card):
-    """App::Part with one LCS per card connector and a box for interfaces.volume (if the card has one)."""
-    part = asm.newObject("App::Part", cid)
-    for name, c in card_connectors(card).items():
-        lcs = part.newObject("App::LocalCoordinateSystem", "%s_%s" % (cid, name))
-        lcs.Label = name
-        lcs.Placement = to_placement(frame(c["o"], c["z"], c["x"]))
-        lcs.addProperty("App::PropertyString", "ConnectorLabel", "AgenticCAD").ConnectorLabel = c.get("label", "")
-    vol = (card.get("interfaces") or {}).get("volume")
-    if vol:
-        v = resolve(card, vol)
-        (cx, cy), (l, w, h) = v["centre_xy"], v["size"]
-        box = part.newObject("Part::Box", cid + "_envelope")
-        box.Length, box.Width, box.Height = l, w, h
-        box.Placement = App.Placement(App.Vector(cx - l / 2, cy - w / 2, v.get("bottom_z", 0)), App.Rotation())
-    return part
-
-
-def _lcs_names(container):
-    """connector name -> LCS object name (envelope LCS are prefixed to stay unique; Label is the connector)."""
-    return {o.Label: o.Name for o in container.Group if o.TypeId == "App::LocalCoordinateSystem"}
 
 
 def build_assembly(req, res):
@@ -97,44 +47,8 @@ def build_assembly(req, res):
     doc.saveAs(out)  # external links need a saved owner document (relative paths)
     asm = doc.addObject("Assembly::AssemblyObject", "Assembly")
     jgroup = asm.newObject("Assembly::JointGroup", "Joints")
-    opened = []
 
-    containers, frames, lcs, mounts = {}, {}, {}, {}
-    for p in plan["parts"]:
-        path = req["parts"].get(p["name"])
-        if not path or not os.path.exists(path):
-            sigs.append(_signal("failure", "part %r has no compiled .FCStd (%s)" % (p["name"], path),
-                                "parts/%s.py" % p["name"], "compile_part it first"))
-            continue
-        d = App.openDocument(os.path.abspath(path))
-        opened.append(d)
-        c = _container(d)
-        if c is None:
-            sigs.append(_signal("failure", "%s: expected one App::Part" % path, p["name"]))
-            continue
-        containers[p["name"]] = c
-    for comp in plan.get("components", []):
-        cid, info = comp["id"], req["components"].get(comp["id"]) or {}
-        card = load_card(info.get("card") or comp["card"])
-        if info.get("fcstd"):
-            d = App.openDocument(os.path.abspath(info["fcstd"]))
-            opened.append(d)
-            containers[cid] = _container(d)
-        else:
-            containers[cid] = _envelope(asm, cid, card)
-    doc.recompute()
-
-    for owner, c in containers.items():
-        lcs[owner] = _lcs_names(c)
-        frames[owner] = {name: to_matrix(c.Document.getObject(obj).Placement) for name, obj in lcs[owner].items()}
-    for comp in plan.get("components", []):
-        cid = comp["id"]
-        mount = [n for n, t in frames.get(cid, {}).items() if _is_identity(t)]
-        if not mount:
-            sigs.append(_signal("failure", "card %s has no mount connector at its frame origin" % comp["card"],
-                                "components/%s.yaml" % comp["card"], "add a connector with o 0, z +z, x +x"))
-        else:
-            mounts[cid] = mount[0]
+    containers, frames, lcs, mounts, opened = O.load(plan, req["parts"], req["components"], asm, sigs)
 
     tree = Tree(plan, frames, mounts)
     sigs.extend(tree.signals)
@@ -193,7 +107,7 @@ def build_assembly(req, res):
     world = tree.fk(tree.joint_values(poses[0])[0])
     owners = {}
     for owner, o in objs.items():
-        shape = o.Shape if o.TypeId == "App::Link" else _part_shape(o)
+        shape = o.Shape if o.TypeId == "App::Link" else _placed(O.owner_shape(o), o.Placement)
         bb = shape.BoundBox if shape and not shape.isNull() else None
         owners[owner] = {"placement": world[owner],
                          "bbox": [bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax] if bb else None}
@@ -207,9 +121,8 @@ def build_assembly(req, res):
     _close(doc, opened)
 
 
-def _part_shape(part):
-    shapes = [o.Shape for o in part.Group if hasattr(o, "Shape") and o.TypeId == "Part::Box"]
-    return OCC.makeCompound([s.transformGeometry(part.Placement.toMatrix()) for s in shapes]) if shapes else None
+def _placed(shape, plc):
+    return shape.transformGeometry(plc.toMatrix()) if shape else None
 
 
 def _apply_pose(asm, doc, tree, objs, ref, wb, values, i, sigs):

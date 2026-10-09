@@ -84,12 +84,26 @@ def op_build_assembly(req, res):
     build_assembly(req, res)
 
 
+def op_sweep_assembly(req, res):
+    """Interference over joint poses + owner mass properties (validate/sweep.py, gates L5/L6)."""
+    from validate.sweep import sweep_assembly
+    sweep_assembly(req, res)
+
+
+def op_mesh_parts(req, res):
+    """STL per part in its own frame (validate/sweep.py; L7 and the exporter read them)."""
+    from validate.sweep import mesh_parts
+    mesh_parts(req, res)
+
+
 OPS = {
     "ping": op_ping,
     "run_script": op_run_script,
     "compile_part": op_compile_part,
     "probe_part": op_probe_part,
     "build_assembly": op_build_assembly,
+    "sweep_assembly": op_sweep_assembly,
+    "mesh_parts": op_mesh_parts,
 }
 
 

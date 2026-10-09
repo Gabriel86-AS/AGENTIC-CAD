@@ -31,7 +31,7 @@ sequenceDiagram
 | Key | Type | Notes |
 |---|---|---|
 | `protocol` | int | `1`; added by `run_request`. A mismatch is refused with a failure signal |
-| `op` | str | `ping`, `run_script`, `compile_part`, `probe_part` (T1.5; request keys in `harness/part_ops.py`), `build_assembly` (T1.6; `assembly/writer.py`) |
+| `op` | str | `ping`, `run_script`, `compile_part`, `probe_part` (T1.5; request keys in `harness/part_ops.py`), `build_assembly` (T1.6; `assembly/writer.py`), `sweep_assembly` and `mesh_parts` (T1.7; `validate/sweep.py`) |
 | `response` | str | absolute path of `res_<n>.json`; added by `run_request` |
 | `timeout_s` | float | optional; default 60 |
 | op-specific | any | `run_script`: `script` (path) plus any keys the script reads from `request` |

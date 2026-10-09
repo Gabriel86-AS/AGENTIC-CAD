@@ -542,6 +542,23 @@
       "minimum": 0,
       "title": "Dof",
       "type": "integer"
+    },
+    "allow_overlap": {
+      "items": {
+        "maxItems": 2,
+        "minItems": 2,
+        "prefixItems": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "type": "array"
+      },
+      "title": "Allow Overlap",
+      "type": "array"
     }
   },
   "required": [

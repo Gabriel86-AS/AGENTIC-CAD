@@ -187,6 +187,7 @@ class AssemblyPlan(_Model):
     joints: list[Joint] = Field(default_factory=list)
     derived: list[Derived] = Field(default_factory=list)
     dof: int = Field(ge=0)
+    allow_overlap: list[tuple[str, str]] = Field(default_factory=list)  # owner pairs exempt from L5 interference
 
     @field_validator("params")
     @classmethod
