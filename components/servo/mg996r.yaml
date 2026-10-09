@@ -37,7 +37,7 @@ params_mm:
 
 actuation:
   type: revolute
-  range_deg: [-90, 90]                              # typical; many units travel ~180 deg total
+  range_deg: [-90, 90]                              # kept over the datasheet's ~120 deg (D35); verify on a sample
   stall_torque_Nm: { at_4_8V: 0.92, at_6V: 1.08 }   # Tower Pro datasheet 9.4 / 11 kgf.cm
   speed_rad_s: { at_4_8V: 6.16, at_6V: 7.48 }       # datasheet 0.17 / 0.14 s per 60 deg
   derating: 0.5                                     # design to <= 50% of stall torque

@@ -38,6 +38,7 @@ class AssemblyCheck:
     masses: dict = field(default_factory=dict)      # owner -> {mass_kg, com_mm, source}
     owners: dict = field(default_factory=dict)      # owner -> worker mass props (volume, area, com, inertia, bbox)
     frames: dict = field(default_factory=dict)
+    mounts: dict = field(default_factory=dict)      # component -> its mount connector
     n_poses: int = 0
     n_checks: int = 0
     elapsed_s: float = 0.0
@@ -91,10 +92,10 @@ def check_assembly(plan: AssemblyPlan, parts: dict[str, Path], io_dir: Path, tim
     sigs = [Signal.from_worker(s) for s in res.signals]
     r = res.result if isinstance(res.result, dict) else {}
     out = AssemblyCheck(False, sigs, r.get("collisions", []), owners=r.get("owners") or {}, frames=r.get("frames") or {},
-                        n_poses=r.get("n_poses", 0), n_checks=r.get("n_checks", 0))
+                        mounts=r.get("mounts") or {}, n_poses=r.get("n_poses", 0), n_checks=r.get("n_checks", 0))
     if res.ok and "owners" in r:
         sigs += _interference_signals(out.collisions)
-        tree = Tree(pd, out.frames, r.get("mounts"))
+        tree = Tree(pd, out.frames, out.mounts)
         dense = grid(pd, *REACH_SAMPLES)
         tools = tool_connectors(plan)
         tool = tools[0] if len(tools) == 1 else None

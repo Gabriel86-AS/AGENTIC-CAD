@@ -75,9 +75,14 @@ def rigid_groups(tree, owners):
 
 
 def _close(docs):
+    """Close each document once (two components of one card share its model document)."""
+    names = []
     for d in docs:
-        if d.Name in App.listDocuments():
-            App.closeDocument(d.Name)
+        if d.Name not in names:
+            names.append(d.Name)
+    for n in names:
+        if n in App.listDocuments():
+            App.closeDocument(n)
 
 
 def sweep_assembly(req, res):

@@ -153,6 +153,11 @@ def _apply_pose(asm, doc, tree, objs, ref, wb, values, i, sigs):
 
 
 def _close(doc, opened):
+    """Close each document once (two components of one card share its model document)."""
+    names = []
     for d in [doc] + opened:
-        if d.Name in App.listDocuments():
-            App.closeDocument(d.Name)
+        if d.Name not in names:
+            names.append(d.Name)
+    for n in names:
+        if n in App.listDocuments():
+            App.closeDocument(n)
