@@ -4,10 +4,10 @@
 updated: 2026-10-09
 plan_version: v0.4 (IMPLEMENTATION_PLAN.md)
 current_phase: P0
-current_phase_status: in_progress (S1-S11 PASS; T0.1-T0.6, T0.8 done; T0.7 partial; T0.9 open)
-next_action: O10 Linux toolchain (gz + pinocchio) to finish T0.7; freeze worker protocol; T0.9 .gitignore + first commit (user approves); O11 live API run when a key exists
-code_written: harness/ (worker protocol + tests), spikes/run.py, spikes/s01-s10, spikes/drivers/s10.py, components/ (card.py, build.py, mg996r + generic_bay cards, servo_mg996r generator), tests/test_components.py, llm/ (tools, backend, agent_sdk_backend, claude_api_backend), spikes/s11_llm.py, spikes/urdf_1joint/, tests/test_llm_permissions.py (22 tests total)
-git: branch master, all files untracked, no commits
+current_phase_status: exit criteria met except S11 live ClaudeAPIBackend run (needs API key, O11)
+next_action: commit P0 closure (ask user), then start P1 (read phase_1_2dof_end_to_end.md); O11 live API run when a key exists
+code_written: harness/ (worker protocol + tests), spikes/run.py, spikes/s01-s10, spikes/drivers/s10.py, components/ (card.py, build.py, mg996r + generic_bay cards, servo_mg996r generator), tests/test_components.py, llm/ (tools, backend, agent_sdk_backend, claude_api_backend), spikes/s11_llm.py, spikes/urdf_1joint/, tests/test_llm_permissions.py (23 tests total)
+git: branch p0-env-spikes, first commit 2ce73d4 (not pushed); later work uncommitted
 ```
 
 ## 1. How to use this directory (token-saving protocol)
@@ -47,9 +47,9 @@ flowchart LR
 | conda | not installed | not needed unless pinocchio lacks a Windows wheel |
 | Assembly / pivy import headless | `JointObject`, `UtilsAssembly`, `pivy` import; joints solve | ok (S1) |
 | Orchestrator venv | uv-managed CPython 3.12.15, `python-preference = only-managed` (LibreOffice 3.12 on PATH breaks venvs) | ok |
-| WSL | default distro `docker-desktop` (no bash) ⇒ always `wsl -d <distro>`; Ubuntu-22.04 has ROS 2 Humble (`check_urdf`), no gz / pinocchio; Ubuntu 26.04 bare; sudo needs a password | partial (O10) |
+| WSL | default distro `docker-desktop` (no bash) ⇒ always `wsl -d <distro>`; Ubuntu-22.04 has ROS 2 Humble (`check_urdf`), no gz / pinocchio; Ubuntu 26.04 bare; sudo needs a password | Humble fallback only |
 | LLM auth | Claude Code subscription login present; no `ANTHROPIC_API_KEY` | Agent SDK ok; API backend offline (O11) |
-| pinocchio | no Windows wheel (`cmeel-assimp`) | → WSL |
+| pinocchio | no Windows wheel (`cmeel-assimp`) | → Docker image (D24) |
 
 ## 4. Task board (current phase)
 
@@ -57,11 +57,11 @@ flowchart LR
 |---|---|---|
 | T0.1 | FreeCAD install facts | done → `docs/env.md` |
 | T0.2 | Orchestrator env (uv, py3.12) | done (pinocchio → WSL) |
-| T0.3 | Worker protocol | done, 5 tests green (`tests/test_worker_protocol.py`); freeze at P0 exit |
+| T0.3 | Worker protocol | done and **frozen v1** (`docs/worker_protocol.md`); 6 tests green |
 | T0.4 | Spikes S1–S11 | S1–S11 PASS (`docs/spike_results.md`); S11 API backend live run pending key |
 | T0.5 | Correct R1/R2 report with results | done: all tags → VERIFIED 1.1.4 / FALSE → fallback / N/A; OndselSolver LGPL-2.1 confirmed |
 | T0.6 | MG996R card + generator, generic bay card | done: `components/`; 4 sketches DoF 0, 1 solid, LCS match card; 4 tests green |
-| T0.7 | 1-joint URDF package | partial: package + yourdfpy + check_urdf (Humble, WSL) PASS; `gz sdf -p`, pinocchio blocked on toolchain install (O10) |
+| T0.7 | 1-joint URDF package | done: yourdfpy, check_urdf, `gz sdf -p`, pinocchio all PASS via Docker `agenticcad-ros:jazzy` |
 | T0.8 | LLM backend spike | done: `llm/`; Agent SDK live PASS; API backend offline-tested, live run needs API key (O11) |
 | T0.9 | Git hygiene + first commit (ask user) | todo |
 
@@ -92,13 +92,12 @@ flowchart LR
 | D21 | Mass props: feature `.Shape` excludes parent `App::Part` placement; inertia about CoM, density 1, mm⁵ | S9 |
 | D22 | Card frame = its mount connector (MG996R: flange underside, centred on holes, +z to shaft). Card `connectors`/`interfaces` name `params_mm` entries (`components/card.py: resolve`); generators bind sketches + LCS to the same Params | T0.6 |
 | D23 | LLM action space: tools defined once as `ToolSpec`; path policy in `PartWorkspace`; Agent SDK hardened with `tools=[]`, MCP server tools only, `dontAsk`, PreToolUse deny hook, `setting_sources=[]`, `strict_mcp_config`, `skills=[]` | S11 |
+| D24 | Linux-side checks (check_urdf, `gz sdf -p`, pinocchio; later ROS 2 / Gazebo gates) run in Docker image `agenticcad-ros:jazzy` built from `docker/ros-tools/Dockerfile`; package dir mounted read-only. WSL Humble is a fallback (`AGENTICCAD_LINUX=wsl`) | T0.7 |
 
 ## 6. Open items / blockers
 
 | # | Item | Resolved by |
 |---|---|---|
-| O8 | Pinocchio: no Windows wheel → run in Linux (see O10) | T0.7 |
-| O10 | Linux toolchain for `gz sdf -p` + pinocchio: WSL has only ROS 2 Humble (`check_urdf`), no gz / Jazzy / pinocchio; install needs sudo (user) or Docker image `osrf/ros:jazzy-desktop-full` (Docker Desktop stopped) | user choice |
 | O11 | `ANTHROPIC_API_KEY` for the live ClaudeAPIBackend run (offline tests pass) | user |
 | O9 | Assembly WB `Gears`/`RackPinion` headless | P3 S12 |
 
@@ -111,7 +110,7 @@ flowchart LR
 | `AGENTS.md` | project goal + working rules |
 | `REFERECES/REFERENCE_GUIDE.md` | index of papers and research notes |
 | `REFERECES/freecad_headless_scripting_research_report.md` | FreeCAD API notes (corrected; tags resolved against 1.1.4 in P0) |
-| `docs/env.md`, `docs/spike_results.md` | env facts; spike answers (P1 reads these) |
+| `docs/env.md`, `docs/spike_results.md`, `docs/worker_protocol.md` | env facts; spike answers; frozen worker protocol v1 (P1 reads these) |
 | `harness/` | worker protocol: `run.py` (orchestrator), `worker.py` (freecadcmd), `protocol.py` |
 | `spikes/` | `run.py` runner, `sNN_*.py`, `drivers/` (orchestrator-side), `results/` (generated) |
 | `components/` | cards (`<family>/<id>.yaml`), `card.py` (load/resolve), `build.py` (CLI), `generators/` |

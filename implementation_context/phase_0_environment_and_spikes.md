@@ -109,12 +109,12 @@ flowchart LR
 | Agent SDK can't fully disable built-in tools | spike S11 | `ClaudeAPIBackend` becomes the default earlier |
 
 ## 7. Exit criteria (all required)
-- [ ] S1–S10 have PASS or a fallback that is implemented as a stub function.
-- [ ] S11: both backends call `compile_part`; permission test green.
-- [ ] Worker protocol frozen (§5) and covered by one test.
-- [ ] MG996R generator `.FCStd`: all sketches DoF = 0, connectors present.
-- [ ] 1-joint URDF passes `check_urdf` + `gz sdf -p`.
-- [ ] R1/R2 report has no `[UNVERIFIED]` tags left; `current_state.md` updated.
+- [x] S1–S10 have PASS or a fallback that is implemented as a stub function.
+- [~] S11: both backends call `compile_part`; permission test green. (Agent SDK live; API backend offline only until an API key exists)
+- [x] Worker protocol frozen (§5) and covered by one test.
+- [x] MG996R generator `.FCStd`: all sketches DoF = 0, connectors present.
+- [x] 1-joint URDF passes `check_urdf` + `gz sdf -p`.
+- [x] R1/R2 report has no `[UNVERIFIED]` tags left; `current_state.md` updated.
 
 ## 8. Next phase (P1) — prepare for
 - P1 builds on: worker protocol, mating rule (§4), S2/S3 outcome (Assembly WB joints vs. own aligner), S5 expression syntax (the SDK's `Params` binding depends on it), S6 diagnostic semantics (L2 gate).

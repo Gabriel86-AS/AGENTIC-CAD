@@ -10,7 +10,7 @@ import sys
 import time
 from pathlib import Path
 
-from harness.protocol import Signal, WorkerResponse
+from harness.protocol import PROTOCOL_VERSION, Signal, WorkerResponse
 
 FREECADCMD = Path(os.environ.get("AGENTICCAD_FREECADCMD", r"C:/Program Files/FreeCAD 1.1/bin/freecadcmd.exe"))
 WORKER = Path(__file__).resolve().parent / "worker.py"
@@ -55,7 +55,7 @@ def run_request(request: dict, io_dir: Path, timeout_s: float | None = None) -> 
     log_path = io_dir / f"log_{n}.txt"
     timeout = timeout_s if timeout_s is not None else float(request.get("timeout_s", DEFAULT_TIMEOUT_S))
 
-    req_path.write_text(json.dumps({**request, "response": str(res_path)}, indent=2), encoding="utf-8")
+    req_path.write_text(json.dumps({"protocol": PROTOCOL_VERSION, **request, "response": str(res_path)}, indent=2), encoding="utf-8")
     env = {**os.environ, "AGENTICCAD_REQUEST": str(req_path)}
 
     t0 = time.monotonic()

@@ -9,6 +9,7 @@ freecadcmd quirks this file relies on (verified 2026-10-09, FreeCAD 1.1.4):
 - the process exit code is 0 even on errors, so the response file is the only result channel.
 
 The worker always writes a response, even on an exception. Plain JSON only (no pydantic here).
+Protocol v1 is frozen (docs/worker_protocol.md); bump PROTOCOL_VERSION on both sides to change it.
 """
 import json
 import os
@@ -22,6 +23,8 @@ if REPO_ROOT not in sys.path:
 
 import FreeCAD  # noqa: E402
 
+PROTOCOL_VERSION = 1  # must equal harness/protocol.py
+
 
 def _freecad_version():
     v = FreeCAD.Version()
@@ -34,6 +37,7 @@ def _signal(level, gate, cause, location="", action=""):
 
 def _empty_response(op):
     return {
+        "protocol": PROTOCOL_VERSION,
         "ok": False,
         "op": op,
         "signals": [],
@@ -88,7 +92,10 @@ def main():
         res_path = req.get("response", res_path)
         res["op"] = req.get("op")
         handler = OPS.get(req.get("op"))
-        if handler is None:
+        if req.get("protocol") != PROTOCOL_VERSION:
+            res["signals"].append(_signal("failure", "harness", "protocol mismatch: request %r, worker %d"
+                                          % (req.get("protocol"), PROTOCOL_VERSION)))
+        elif handler is None:
             res["signals"].append(_signal("failure", "harness", "unknown op %r" % req.get("op")))
         else:
             handler(req, res)

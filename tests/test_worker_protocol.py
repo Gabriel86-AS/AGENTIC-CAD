@@ -42,3 +42,17 @@ def test_timeout_kills_worker(tmp_path):
     assert not res.ok
     assert res.signals[0].gate == "harness" and "timeout" in res.signals[0].cause
     assert not (tmp_path / "res_0.json").exists()
+
+
+FROZEN_V1_KEYS = {"protocol", "ok", "op", "signals", "artifacts", "metrics", "result", "freecad_version", "elapsed_s"}
+
+
+def test_protocol_v1_frozen_shape(tmp_path):
+    """The raw response file has exactly the v1 keys; a request with another version is refused."""
+    import json
+
+    res = run_request({"op": "ping"}, tmp_path)
+    raw = json.loads((tmp_path / "res_0.json").read_text(encoding="utf-8"))
+    assert set(raw) == FROZEN_V1_KEYS and raw["protocol"] == 1 and res.protocol == 1
+    bad = run_request({"op": "ping", "protocol": 2}, tmp_path)
+    assert not bad.ok and "protocol mismatch" in bad.signals[0].cause

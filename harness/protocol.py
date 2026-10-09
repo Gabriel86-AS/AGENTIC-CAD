@@ -1,10 +1,18 @@
-"""Orchestrator-side schema for worker responses (P0 §5). The worker emits plain JSON matching this."""
+"""Orchestrator-side schema for worker responses. The worker emits plain JSON matching this.
+
+Protocol v1 is frozen at P0 exit (docs/worker_protocol.md). Unknown fields are rejected, so any
+change needs PROTOCOL_VERSION bumped here and in harness/worker.py.
+"""
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+PROTOCOL_VERSION = 1
 
 
 class Signal(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     level: Literal["failure", "warning", "info"]
     gate: str
     cause: str
@@ -13,6 +21,9 @@ class Signal(BaseModel):
 
 
 class WorkerResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    protocol: int = PROTOCOL_VERSION
     ok: bool
     op: str | None = None
     signals: list[Signal] = Field(default_factory=list)

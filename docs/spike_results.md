@@ -133,5 +133,6 @@ Code: `llm/tools.py` (ToolSpec + `PartWorkspace`), `llm/backend.py` (`LLMBackend
 `spikes/urdf_1joint/` (ament_cmake package): `urdf/one_joint.urdf`, `meshes/*.stl` (metres), `make_meshes.py` (worker: meshes + inertials), `check.py`.
 - `base_link` = MG996R card frame; `arm_link` = horn connector frame; joint origin = card `output_shaft` (10, 0, 16.9) mm; `axis 0 0 1`;
   limits from the card (±90°, effort 1.08 × 0.5 = 0.54 N·m, velocity 7 rad/s); inertials per S9 (arm checked against m/12·(b²+c²)).
-- Results (`spikes/results/t07.json`): **yourdfpy pass** (FK at q = 0.5 exact, both meshes load), **check_urdf pass** (ROS 2 Humble in WSL Ubuntu-22.04),
-  **gz sdf -p unavailable**, **pinocchio unavailable** (neither installed in WSL; installing needs sudo or Docker).
+- Results (`spikes/results/t07.json`), Docker image `agenticcad-ros:jazzy` (`docker/ros-tools/Dockerfile`: ROS 2 Jazzy + Gazebo Harmonic + pinocchio): **all four pass**.
+  yourdfpy (Windows venv): FK at q = 0.5 exact, both meshes load. check_urdf: parsed, root base_link → arm_link. `gz sdf -p`: SDF emitted.
+  pinocchio: nq 1, effort 0.54, velocity 7.0, link masses 0.055 / 0.003048, FK error 0. (WSL Ubuntu-22.04 + Humble also passes check_urdf: `AGENTICCAD_LINUX=wsl`.)

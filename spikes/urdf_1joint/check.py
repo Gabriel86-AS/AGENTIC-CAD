@@ -3,12 +3,13 @@
     uv run python -m spikes.urdf_1joint.check
 
   yourdfpy   load (package:// resolved to this dir), FK at q = 0.5 rad vs. origin * Rz(q)  [Windows venv]
-  check_urdf urdfdom parser                                                             [WSL, ROS 2 setup]
-  gz sdf -p  URDF -> SDF conversion                                                     [WSL, Gazebo]
-  pinocchio  buildModel, FK at q = 0.5 rad                                              [WSL python]
+  check_urdf urdfdom parser                                                             [Linux]
+  gz sdf -p  URDF -> SDF conversion                                                     [Linux, Gazebo]
+  pinocchio  buildModel, FK at q = 0.5 rad                                              [Linux python]
 A tool that is not installed is reported as "unavailable", never as a pass.
-WSL distro / ROS setup: env AGENTICCAD_WSL_DISTRO (default Ubuntu-22.04), AGENTICCAD_ROS_SETUP
-(default /opt/ros/humble/setup.bash). Results go to spikes/results/t07.json.
+Linux runner: env AGENTICCAD_LINUX = "docker" (default; image AGENTICCAD_ROS_IMAGE, default
+agenticcad-ros:jazzy from docker/ros-tools) or "wsl" (distro AGENTICCAD_WSL_DISTRO, default Ubuntu-22.04).
+The package dir is mounted read-only at /pkg. Results go to spikes/results/t07.json.
 """
 import json
 import math
@@ -21,8 +22,10 @@ import yourdfpy
 
 PKG = Path(__file__).resolve().parent
 URDF = PKG / "urdf" / "one_joint.urdf"
+RUNNER = os.environ.get("AGENTICCAD_LINUX", "docker")
+IMAGE = os.environ.get("AGENTICCAD_ROS_IMAGE", "agenticcad-ros:jazzy")
 DISTRO = os.environ.get("AGENTICCAD_WSL_DISTRO", "Ubuntu-22.04")
-ROS_SETUP = os.environ.get("AGENTICCAD_ROS_SETUP", "/opt/ros/humble/setup.bash")
+ROS_SETUP = "/opt/ros/jazzy/setup.bash" if RUNNER == "docker" else "/opt/ros/humble/setup.bash"
 Q = 0.5
 T_JOINT = np.array([0.010, 0.0, 0.0169])
 
@@ -35,15 +38,21 @@ def expected_arm_pose(q):
     return T
 
 
-def wsl_path(p: Path) -> str:
+def lpath(p: Path) -> str:
+    """Path of a package file as seen by the Linux runner."""
+    if RUNNER == "docker":
+        return "/pkg/" + p.relative_to(PKG).as_posix()
     drive, rest = str(p).split(":", 1)
     return f"/mnt/{drive.lower()}{rest.replace(chr(92), '/')}"
 
 
-def wsl(cmd: str, timeout=120) -> subprocess.CompletedProcess:
+def linux(cmd: str, timeout=180) -> subprocess.CompletedProcess:
     script = f"source {ROS_SETUP} 2>/dev/null; {cmd}"
-    return subprocess.run(["wsl", "-d", DISTRO, "-e", "bash", "-c", script],
-                          capture_output=True, text=True, timeout=timeout, encoding="utf-8", errors="replace")
+    if RUNNER == "docker":
+        argv = ["docker", "run", "--rm", "-i", "-v", f"{PKG}:/pkg:ro", IMAGE, "bash", "-c", script]
+    else:
+        argv = ["wsl", "-d", DISTRO, "-e", "bash", "-c", script]
+    return subprocess.run(argv, capture_output=True, text=True, timeout=timeout, encoding="utf-8", errors="replace")
 
 
 def check_yourdfpy():
@@ -60,35 +69,40 @@ def check_yourdfpy():
 
 
 def check_urdf_tool():
-    r = wsl(f"command -v check_urdf >/dev/null || exit 127; check_urdf '{wsl_path(URDF)}'")
+    r = linux(f"command -v check_urdf >/dev/null || exit 127; check_urdf '{lpath(URDF)}'")
     if r.returncode == 127:
-        return {"status": "unavailable", "detail": f"check_urdf not found in {DISTRO}"}
+        return {"status": "unavailable", "detail": f"check_urdf not found in {RUNNER}"}
     ok = r.returncode == 0 and "Successfully Parsed XML" in r.stdout
     return {"status": "pass" if ok else "fail", "stdout": r.stdout.strip().splitlines()[-6:], "stderr": r.stderr.strip()[-500:]}
 
 
 def check_gz_sdf():
-    r = wsl(f"command -v gz >/dev/null || exit 127; gz sdf -p '{wsl_path(URDF)}'")
+    r = linux(f"command -v gz >/dev/null || exit 127; gz sdf -p '{lpath(URDF)}'")
     if r.returncode == 127:
-        return {"status": "unavailable", "detail": f"gz not found in {DISTRO}"}
+        return {"status": "unavailable", "detail": f"gz not found in {RUNNER}"}
     ok = r.returncode == 0 and "<sdf" in r.stdout and "j_shaft" in r.stdout
     return {"status": "pass" if ok else "fail", "stderr": r.stderr.strip()[-500:]}
 
 
 def check_pinocchio():
     py = (
-        "import sys, pinocchio as pin, numpy as np\n"
-        f"m = pin.buildModelFromUrdf('{wsl_path(URDF)}'); d = m.createData()\n"
+        "import json, pinocchio as pin, numpy as np\n"
+        f"m = pin.buildModelFromUrdf('{lpath(URDF)}'); d = m.createData()\n"
         f"q = np.array([{Q}]); pin.forwardKinematics(m, d, q)\n"
         "M = d.oMi[m.getJointId('j_shaft')]\n"
-        "print(m.nq, list(M.translation), list(M.rotation.flatten()), m.effortLimit.tolist(), m.velocityLimit.tolist())\n"
+        "print(json.dumps({'nq': m.nq, 'T': M.homogeneous.tolist(), 'effort': m.effortLimit.tolist(),\n"
+        "                  'velocity': m.velocityLimit.tolist(), 'mass': [i.mass for i in m.inertias]}))\n"
     )
-    r = wsl(f"python3 -c \"import pinocchio\" 2>/dev/null || exit 127; python3 - <<'EOF'\n{py}EOF")
+    r = linux(f"python3 -c \"import pinocchio\" 2>/dev/null || exit 127; python3 - <<'EOF'\n{py}EOF")
     if r.returncode == 127:
-        return {"status": "unavailable", "detail": f"pinocchio not importable in {DISTRO}"}
+        return {"status": "unavailable", "detail": f"pinocchio not importable in {RUNNER}"}
     if r.returncode != 0:
         return {"status": "fail", "stderr": r.stderr.strip()[-800:]}
-    return {"status": "pass", "stdout": r.stdout.strip()}
+    out = json.loads(r.stdout.strip().splitlines()[-1])
+    out["fk_max_abs_err"] = float(np.abs(np.array(out.pop("T")) - expected_arm_pose(Q)).max())
+    ok = (out["nq"] == 1 and out["fk_max_abs_err"] < 1e-9
+          and abs(out["effort"][0] - 0.54) < 1e-9 and abs(out["velocity"][0] - 7.0) < 1e-9)
+    return {"status": "pass" if ok else "fail", **out}
 
 
 def main():
@@ -100,7 +114,7 @@ def main():
         except Exception as e:  # report, keep going
             results[name] = {"status": "fail", "error": f"{type(e).__name__}: {e}"}
         print(f"{name:11s} {results[name]['status']}")
-    results["distro"] = DISTRO
+    results["runner"] = IMAGE if RUNNER == "docker" else DISTRO
     out = PKG.parent / "results" / "t07.json"
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
