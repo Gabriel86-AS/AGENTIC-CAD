@@ -78,11 +78,18 @@ def op_probe_part(req, res):
     probe_part(req, res)
 
 
+def op_build_assembly(req, res):
+    """Plan + compiled parts -> assembly.FCStd with Assembly WB joints, posed by our FK (assembly/writer.py)."""
+    from assembly.writer import build_assembly
+    build_assembly(req, res)
+
+
 OPS = {
     "ping": op_ping,
     "run_script": op_run_script,
     "compile_part": op_compile_part,
     "probe_part": op_probe_part,
+    "build_assembly": op_build_assembly,
 }
 
 

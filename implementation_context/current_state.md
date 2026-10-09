@@ -4,10 +4,10 @@
 updated: 2026-10-09
 plan_version: v0.4 (IMPLEMENTATION_PLAN.md)
 current_phase: P1
-current_phase_status: in_progress; T1.1-T1.5 done (P0 closed except O11 live API run)
-next_action: T1.6 assembly builder (aligner per D13/D15 + Assembly WB writer) on compiled parts; then T1.10 servo_u_bracket / T1.12 golden B1-3. Measure unverified card values when hardware is at hand (O12)
-code_written: harness/ (worker protocol + tests), spikes/run.py, spikes/s01-s10, spikes/drivers/s10.py, components/ (card.py with card expressions, build.py, cards: servo/mg996r (+ horn), electronics/generic_bay, esp32_devkit, pca9685, fastener/m3_screw, m3_insert; servo_mg996r generator), tests/test_components.py, llm/ (tools, backend, agent_sdk_backend, claude_api_backend), spikes/s11_llm.py, spikes/urdf_1joint/, tests/test_llm_permissions.py, schemas/ (plan, signal, profile, names, export → schemas/json/), profiles/ (generic_fdm, materials), tests/test_schemas.py, sdk/ (expr, sketch, part, errors), tests/test_sdk.py + tests/freecad/sdk_cases.py, docs/sdk.md, harness/ (lint L0, part_ops worker ops, tools compile_part/probe_part, feedback), tests/test_harness_tools.py (91 tests total)
-git: branch p0-env-spikes, commits 2ce73d4, 7ee20dd (P0 closure), 82da443 (T1.1-T1.3), 1800634 (D28 revised), 175e1e7 (T1.4), T1.5 commit; not pushed
+current_phase_status: in_progress; T1.1-T1.6 done (P0 closed except O11 live API run)
+next_action: T1.7 validators (plan validator reusing assembly.kinematics.Tree; L5 interference/reach sweep on build_assembly poses; L6 RNEA; L7-basic); T1.10 servo_u_bracket can go in parallel; then T1.8 exporter and T1.12 golden B1-3. Measure unverified card values when hardware is at hand (O12)
+code_written: harness/ (worker protocol + tests), spikes/run.py, spikes/s01-s10, spikes/drivers/s10.py, components/ (card.py with card expressions, build.py, cards: servo/mg996r (+ horn), electronics/generic_bay, esp32_devkit, pca9685, fastener/m3_screw, m3_insert; servo_mg996r generator), tests/test_components.py, llm/ (tools, backend, agent_sdk_backend, claude_api_backend), spikes/s11_llm.py, spikes/urdf_1joint/, tests/test_llm_permissions.py, schemas/ (plan, signal, profile, names, export → schemas/json/), profiles/ (generic_fdm, materials), tests/test_schemas.py, sdk/ (expr, sketch, part, errors), tests/test_sdk.py + tests/freecad/sdk_cases.py, docs/sdk.md, harness/ (lint L0, part_ops worker ops, tools compile_part/probe_part, feedback), tests/test_harness_tools.py, assembly/ (kinematics, writer, builder), tests/test_assembly.py + tests/freecad/assembly_reopen.py (105 tests total)
+git: branch p0-env-spikes, commits 2ce73d4, 7ee20dd (P0 closure), 82da443 (T1.1-T1.3), 1800634 (D28 revised), 175e1e7 (T1.4), 978bae1 (T1.5), T1.6 commit; not pushed
 ```
 
 ## 1. How to use this directory (token-saving protocol)
@@ -60,8 +60,8 @@ flowchart LR
 | T1.3 | `profiles/generic_fdm.yaml`, `materials.yaml` | done: `profiles/__init__.py` (`load_profile`, `hole_diameter`) |
 | T1.4 | Cards: ESP32 DevKit, PCA9685, M3 screw/insert (MG996R, generic bay exist) + MG996R horn interface; SDK `mate_to`, `electronics_bay` | done: 4 new cards + MG996R `horn` connector/interface; SDK `mate_to` (disc horn), `electronics_bay` (floor/walls/openings + standoffs), `mount` standoffs, `hole(fit="insert_m3", counterbore=)`; 22 SDK cases, all volumes exact |
 | T1.5 | Harness tools `compile_part`, `probe_part`, signal formatter | done: `harness/lint.py` (L0), worker ops `compile_part`/`probe_part` (`harness/part_ops.py`), `harness/tools.py` (+ plan-side L3: connector pose 0.01 mm, label, bbox ±20 %), `harness/feedback.py`; `PartWorkspace` exposes both tools |
-| T1.6 | Assembly builder | todo (next) |
-| T1.7 | Validators L0–L3, L5, L6 (+plan), L7-basic | todo |
+| T1.6 | Assembly builder | done: `assembly/kinematics.py` (pure-Python tree + FK, both Pythons), worker op `build_assembly` (`assembly/writer.py`), `assembly/builder.py` (card models rebuilt when stale); App::Link per owner, WB joints, preplace + residual gate per pose; reopen + param edit tested |
+| T1.7 | Validators L0–L3, L5, L6 (+plan), L7-basic | todo (next) |
 | T1.8 | Exporter + D1, D2, D4 | todo |
 | T1.9 | Agents + rule router + budgets | todo |
 | T1.10 | Manipulator pack v0 | todo |
@@ -104,6 +104,7 @@ P0 leftovers: O11 (live ClaudeAPIBackend run).
 | D29 | Card values may be param expressions (`"spline_top + horn_top_above_tip - horn_disc_t"`, + - * / only, `components/card.py`); SDK and generators bind them as FreeCAD expressions. Card frame = the host surface the component rests on, +z out of it (servo flange underside, bay floor top, board recess top). Electronics cards share `volume` / `standoffs` / `openings` / `keep_out` interfaces | T1.4 |
 | D30 | `mate_to("<comp>.horn", at)`: card `horn` connector = horn disc underside (same axis as `output_shaft`); driven part's face at z = 0, recess + M2 taps + screwdriver access cut above it. `electronics_bay` floor_t default = `max(3 mm, deepest card cut below the frame + min_wall)` (live FreeCAD `max()`); slotted standoffs = slot + M3 nut trap from the floor underside | T1.4 |
 | D31 | L0 is a guardrail, not a sandbox: SDK-only surface (no `_attrs`, no raw `.doc/.body/.sheet/.obj`), worker process = boundary. compile_part = L0 → worker (L1, L2, local L3, save .FCStd) → plan-side L3 on the orchestrator; feedback = status line + ≤ 8 signals, failures first. probe_part reopens the .FCStd read-only; snippet's last expression is the result. Stale .FCStd deleted before each compile | T1.5 |
+| D32 | Assembly = `assembly.FCStd` saved first, then one `App::Link` per part/card model .FCStd (relative external links; reopening loads them; a part param edit + `solve()` propagates). Cards without a generator → envelope App::Part (LCS per connector + `interfaces.volume` box) inside the assembly. Component attach = WB Fixed joint `attach_<id>` (card mount connector = the LCS at the card frame origin). Plan→WB types: revolute/continuous/gears → Revolute, slider/rack_pinion → Slider (`Offset1 = Tz(d)` drives it), cylindrical, ball, fixed. Residual gate 1e-4 mm / 1e-4°, gate L5. The WB does not store q: a free slider absorbs a length edit along its axis; poses come from our FK only | T1.6 |
 | D24 | Linux-side checks (check_urdf, `gz sdf -p`, pinocchio; later ROS 2 / Gazebo gates) run in Docker image `agenticcad-ros:jazzy` built from `docker/ros-tools/Dockerfile`; package dir mounted read-only. WSL Humble is a fallback (`AGENTICCAD_LINUX=wsl`) | T0.7 |
 
 ## 6. Open items / blockers
@@ -132,5 +133,6 @@ P0 leftovers: O11 (live ClaudeAPIBackend run).
 | `schemas/` | pydantic contracts; `names.py` is FreeCAD-safe; `json/` generated |
 | `profiles/` | print profiles + materials (pure-Python loader) |
 | `sdk/` | FreeCAD-native SDK v0 (runs in freecadcmd); `docs/sdk.md` = agent-facing reference |
+| `assembly/` | `kinematics.py` (tree + FK, pure Python), `writer.py` (worker op `build_assembly`), `builder.py` (orchestrator) |
 | `llm/` | `LLMBackend` + `AgentSDKBackend` / `ClaudeAPIBackend`; `tools.py` (`ToolSpec`, `PartWorkspace`) |
 | `Articad Architecture diagram.png` | ArtiCAD Fig. 2 (mapped in plan §1.5) |
