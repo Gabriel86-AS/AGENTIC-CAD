@@ -1,0 +1,3 @@
+# Printed-material table (P1 §4.5). Strength values are typical datasheet ranges, for reports only.
+PETG: { density_g_cm3: 1.27, tensile_MPa: 50, note: default; tougher, less brittle than PLA }
+PLA:  { density_g_cm3: 1.24, tensile_MPa: 60, note: stiffer, brittle; softens ~55 C }

@@ -1,0 +1,28 @@
+# Generic FDM profile (plan §4.2): conservative defaults most consumer printers meet. Replace per user.
+id: generic_fdm
+process: fdm
+build_volume_mm: [180, 180, 180]
+nozzle_mm: 0.4
+layer_mm: 0.2
+line_width_mm: 0.45
+wall_count: 3                  # shell thickness for the printed-mass model = wall_count * line_width (P1 §4.5)
+infill: 0.20
+min_wall_mm: 1.2
+min_feature_mm: 0.8
+max_overhang_deg: 45           # from vertical
+max_bridge_mm: 10
+
+# Hole/fit table read by SDK hole(fit=...). Diametral allowance added to the nominal diameter, mm.
+# Plan §4.2: sliding 0.3 per side, press 0.1, horizontal holes +0.2 (extra, when the axis is horizontal in print orientation).
+fits:
+  clearance: 0.6               # sliding / free fit: 0.3 per side
+  press: 0.2                   # bearing / pin press: 0.1 per side
+  close: 0.3                   # snug, still assembles by hand
+horizontal_hole_extra_mm: 0.2
+# Screw holes by thread, mm diameter (clearance through, tap = self-tapping into plastic).
+screws:
+  M2:   { clearance: 2.4, tap: 1.8 }
+  M2.5: { clearance: 2.9, tap: 2.2 }
+  M3:   { clearance: 3.4, tap: 2.7 }
+  M4:   { clearance: 4.5, tap: 3.6 }
+  M5:   { clearance: 5.5, tap: 4.5 }

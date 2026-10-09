@@ -3,11 +3,11 @@
 ```yaml
 updated: 2026-10-09
 plan_version: v0.4 (IMPLEMENTATION_PLAN.md)
-current_phase: P0
-current_phase_status: exit criteria met except S11 live ClaudeAPIBackend run (needs API key, O11)
-next_action: commit P0 closure (ask user), then start P1 (read phase_1_2dof_end_to_end.md); O11 live API run when a key exists
-code_written: harness/ (worker protocol + tests), spikes/run.py, spikes/s01-s10, spikes/drivers/s10.py, components/ (card.py, build.py, mg996r + generic_bay cards, servo_mg996r generator), tests/test_components.py, llm/ (tools, backend, agent_sdk_backend, claude_api_backend), spikes/s11_llm.py, spikes/urdf_1joint/, tests/test_llm_permissions.py (23 tests total)
-git: branch p0-env-spikes, first commit 2ce73d4 (not pushed); later work uncommitted
+current_phase: P1
+current_phase_status: in_progress; T1.1, T1.2, T1.3 done (P0 closed except O11 live API run)
+next_action: T1.4 cards (ESP32 DevKit, PCA9685, M3 screw/insert) + MG996R horn data -> SDK mate_to + electronics_bay; then T1.5 compile_part/probe_part
+code_written: harness/ (worker protocol + tests), spikes/run.py, spikes/s01-s10, spikes/drivers/s10.py, components/ (card.py, build.py, mg996r + generic_bay cards, servo_mg996r generator), tests/test_components.py, llm/ (tools, backend, agent_sdk_backend, claude_api_backend), spikes/s11_llm.py, spikes/urdf_1joint/, tests/test_llm_permissions.py, schemas/ (plan, signal, profile, names, export → schemas/json/), profiles/ (generic_fdm, materials), tests/test_schemas.py, sdk/ (expr, sketch, part, errors), tests/test_sdk.py + tests/freecad/sdk_cases.py, docs/sdk.md (54 tests total)
+git: branch p0-env-spikes, commits 2ce73d4, 7ee20dd (P0 closure), not pushed; P1 work uncommitted
 ```
 
 ## 1. How to use this directory (token-saving protocol)
@@ -20,14 +20,14 @@ git: branch p0-env-spikes, first commit 2ce73d4 (not pushed); later work uncommi
 
 ```mermaid
 flowchart LR
-    P0["P0 env + spikes<br/>IN PROGRESS"]:::cur --> P1["P1 2-DOF e2e"] --> P2["P2 3-DOF + validation"] --> P3["P3 wrist · gripper · ROS 2"] --> P4["P4 6-DOF · memory · edits"] --> P5["P5 product hardening"]
+    P0["P0 env + spikes<br/>DONE"] --> P1["P1 2-DOF e2e<br/>IN PROGRESS"]:::cur --> P2["P2 3-DOF + validation"] --> P3["P3 wrist · gripper · ROS 2"] --> P4["P4 6-DOF · memory · edits"] --> P5["P5 product hardening"]
     classDef cur fill:#ffd54f,stroke:#e65100,color:#000
 ```
 
 | Phase | File | Status | Exit met |
 |---|---|---|---|
-| P0 | `phase_0_environment_and_spikes.md` | in_progress | — |
-| P1 | `phase_1_2dof_end_to_end.md` | not_started | — |
+| P0 | `phase_0_environment_and_spikes.md` | done | yes (O11 open) |
+| P1 | `phase_1_2dof_end_to_end.md` | in_progress | — |
 | P2 | `phase_2_3dof_validation_depth.md` | not_started | — |
 | P3 | `phase_3_wrist_gripper_ros2.md` | not_started | — |
 | P4 | `phase_4_6dof_memory_edits.md` | not_started | — |
@@ -51,19 +51,24 @@ flowchart LR
 | LLM auth | Claude Code subscription login present; no `ANTHROPIC_API_KEY` | Agent SDK ok; API backend offline (O11) |
 | pinocchio | no Windows wheel (`cmeel-assimp`) | → Docker image (D24) |
 
-## 4. Task board (current phase)
+## 4. Task board (current phase: P1)
 
 | ID | Task | Status |
 |---|---|---|
-| T0.1 | FreeCAD install facts | done → `docs/env.md` |
-| T0.2 | Orchestrator env (uv, py3.12) | done (pinocchio → WSL) |
-| T0.3 | Worker protocol | done and **frozen v1** (`docs/worker_protocol.md`); 6 tests green |
-| T0.4 | Spikes S1–S11 | S1–S11 PASS (`docs/spike_results.md`); S11 API backend live run pending key |
-| T0.5 | Correct R1/R2 report with results | done: all tags → VERIFIED 1.1.4 / FALSE → fallback / N/A; OndselSolver LGPL-2.1 confirmed |
-| T0.6 | MG996R card + generator, generic bay card | done: `components/`; 4 sketches DoF 0, 1 solid, LCS match card; 4 tests green |
-| T0.7 | 1-joint URDF package | done: yourdfpy, check_urdf, `gz sdf -p`, pinocchio all PASS via Docker `agenticcad-ros:jazzy` |
-| T0.8 | LLM backend spike | done: `llm/`; Agent SDK live PASS; API backend offline-tested, live run needs API key (O11) |
-| T0.9 | Git hygiene + first commit (ask user) | todo |
+| T1.1 | `schemas/` + JSON schema export | done: `Spec`, `AssemblyPlan` (+ `Param` ranges, `Connector`, `Joint`, `Mimic`, `Derived`), `Signal`, `TraceEvent`, `PrintProfile`; `python -m schemas.export`; test fails if JSON is stale |
+| T1.2 | SDK core v0 + unit tests per call | done: `sdk/` (Part, params, datum, sketch rect/circle(s)/slot/polygon, pad, pocket, hole(fit), connector, mount, cable_channel, report, save); 15 cases in one worker run (~2 s); `mate_to` + `electronics_bay` moved to T1.4 |
+| T1.3 | `profiles/generic_fdm.yaml`, `materials.yaml` | done: `profiles/__init__.py` (`load_profile`, `hole_diameter`) |
+| T1.4 | Cards: ESP32 DevKit, PCA9685, M3 screw/insert (MG996R, generic bay exist) + MG996R horn interface; SDK `mate_to`, `electronics_bay` | todo (next) |
+| T1.5 | Harness tools `compile_part`, `probe_part`, signal formatter | todo |
+| T1.6 | Assembly builder | todo |
+| T1.7 | Validators L0–L3, L5, L6 (+plan), L7-basic | todo |
+| T1.8 | Exporter + D1, D2, D4 | todo |
+| T1.9 | Agents + rule router + budgets | todo |
+| T1.10 | Manipulator pack v0 | todo |
+| T1.11 | Bench runner + B1-6, B1-7 | todo |
+| T1.12 | Golden B1-3 (no LLM) — first milestone | todo |
+
+P0 leftovers: O11 (live ClaudeAPIBackend run).
 
 ## 5. Decision log (do not re-litigate)
 
@@ -92,6 +97,10 @@ flowchart LR
 | D21 | Mass props: feature `.Shape` excludes parent `App::Part` placement; inertia about CoM, density 1, mm⁵ | S9 |
 | D22 | Card frame = its mount connector (MG996R: flange underside, centred on holes, +z to shaft). Card `connectors`/`interfaces` name `params_mm` entries (`components/card.py: resolve`); generators bind sketches + LCS to the same Params | T0.6 |
 | D23 | LLM action space: tools defined once as `ToolSpec`; path policy in `PartWorkspace`; Agent SDK hardened with `tools=[]`, MCP server tools only, `dontAsk`, PreToolUse deny hook, `setting_sources=[]`, `strict_mcp_config`, `skills=[]` | S11 |
+| D25 | Two Signal types: worker wire `harness.protocol.Signal` (frozen v1, `info`, no evidence) and orchestrator `schemas.signal.Signal` (`note`, `evidence`); convert with `Signal.from_worker` | T1.1 |
+| D26 | Names (params, parts, connectors, joints) = lower_snake_case, not a FreeCAD unit symbol (`schemas/names.py`, shared with the SDK). Schemas check structure only; cross-refs/tree/DOF are the plan validator's (signals, not exceptions) | T1.1 |
+| D27 | SDK: every length is a `Q` (value + FreeCAD expression); literals auto-promoted to Params aliases (`source: literal`), card dims to `<component>_<param>`, profile fits to `fit_*` / `tap_m3`, so every dimension is GUI-editable (no `fixed:` tag). Literals in sums carry the unit (`+ 3 mm`; unitless fails). Sheet columns name/value/min/max/source. `agenticcad` = alias of `sdk` | T1.2 |
+| D28 | Frame datums (connectors, mounts, channels) = `PartDesign::Plane` on body XY with `AttachmentOffset` = frame; origin bound, orientation fixed at build time | T1.2 |
 | D24 | Linux-side checks (check_urdf, `gz sdf -p`, pinocchio; later ROS 2 / Gazebo gates) run in Docker image `agenticcad-ros:jazzy` built from `docker/ros-tools/Dockerfile`; package dir mounted read-only. WSL Humble is a fallback (`AGENTICCAD_LINUX=wsl`) | T0.7 |
 
 ## 6. Open items / blockers
@@ -115,5 +124,8 @@ flowchart LR
 | `spikes/` | `run.py` runner, `sNN_*.py`, `drivers/` (orchestrator-side), `results/` (generated) |
 | `components/` | cards (`<family>/<id>.yaml`), `card.py` (load/resolve), `build.py` (CLI), `generators/` |
 | `build/` | generated models (`build/components/*.FCStd`), not source |
+| `schemas/` | pydantic contracts; `names.py` is FreeCAD-safe; `json/` generated |
+| `profiles/` | print profiles + materials (pure-Python loader) |
+| `sdk/` | FreeCAD-native SDK v0 (runs in freecadcmd); `docs/sdk.md` = agent-facing reference |
 | `llm/` | `LLMBackend` + `AgentSDKBackend` / `ClaudeAPIBackend`; `tools.py` (`ToolSpec`, `PartWorkspace`) |
 | `Articad Architecture diagram.png` | ArtiCAD Fig. 2 (mapped in plan §1.5) |

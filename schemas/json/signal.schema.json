@@ -1,0 +1,44 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "level": {
+      "enum": [
+        "failure",
+        "warning",
+        "note"
+      ],
+      "title": "Level",
+      "type": "string"
+    },
+    "gate": {
+      "title": "Gate",
+      "type": "string"
+    },
+    "cause": {
+      "title": "Cause",
+      "type": "string"
+    },
+    "location": {
+      "default": "",
+      "title": "Location",
+      "type": "string"
+    },
+    "action": {
+      "default": "",
+      "title": "Action",
+      "type": "string"
+    },
+    "evidence": {
+      "additionalProperties": true,
+      "title": "Evidence",
+      "type": "object"
+    }
+  },
+  "required": [
+    "level",
+    "gate",
+    "cause"
+  ],
+  "title": "Signal",
+  "type": "object"
+}

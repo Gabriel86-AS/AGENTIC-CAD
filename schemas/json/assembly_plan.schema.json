@@ -1,0 +1,555 @@
+{
+  "$defs": {
+    "ComponentUse": {
+      "additionalProperties": false,
+      "description": "A purchased part placed in the assembly: card instance fixed to a part connector.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "card": {
+          "title": "Card",
+          "type": "string"
+        },
+        "attach_to": {
+          "title": "Attach To",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "card",
+        "attach_to"
+      ],
+      "title": "ComponentUse",
+      "type": "object"
+    },
+    "Connector": {
+      "additionalProperties": false,
+      "description": "ArtiCAD c = (n, o, z, x, l), in the owner's frame, mm. z and x are unit length and orthogonal.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "o": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "O",
+          "type": "array"
+        },
+        "z": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Z",
+          "type": "array"
+        },
+        "x": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "X",
+          "type": "array"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "o",
+        "z",
+        "x",
+        "label"
+      ],
+      "title": "Connector",
+      "type": "object"
+    },
+    "Derived": {
+      "additionalProperties": false,
+      "description": "Part built as a rigid SE(3) transform of another (mirror / pattern).",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "mirror",
+            "pattern"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "plane": {
+          "anyOf": [
+            {
+              "enum": [
+                "XY",
+                "XZ",
+                "YZ"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plane"
+        }
+      },
+      "required": [
+        "name",
+        "source",
+        "op"
+      ],
+      "title": "Derived",
+      "type": "object"
+    },
+    "Joint": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "fixed",
+            "revolute",
+            "continuous",
+            "slider",
+            "cylindrical",
+            "ball",
+            "gears",
+            "rack_pinion"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "parent": {
+          "title": "Parent",
+          "type": "string"
+        },
+        "child": {
+          "title": "Child",
+          "type": "string"
+        },
+        "driver": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Driver"
+        },
+        "limits": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Limits"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "servos_on_axis": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Servos On Axis",
+          "type": "integer"
+        },
+        "mimic": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Mimic"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "parent",
+        "child"
+      ],
+      "title": "Joint",
+      "type": "object"
+    },
+    "Limits": {
+      "additionalProperties": false,
+      "description": "Revolute: rad. Slider: mm. effort/velocity 'from_card' needs a driver.",
+      "properties": {
+        "lower": {
+          "title": "Lower",
+          "type": "number"
+        },
+        "upper": {
+          "title": "Upper",
+          "type": "number"
+        },
+        "effort": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "const": "from_card",
+              "type": "string"
+            }
+          ],
+          "default": "from_card",
+          "title": "Effort"
+        },
+        "velocity": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "const": "from_card",
+              "type": "string"
+            }
+          ],
+          "default": "from_card",
+          "title": "Velocity"
+        }
+      },
+      "required": [
+        "lower",
+        "upper"
+      ],
+      "title": "Limits",
+      "type": "object"
+    },
+    "Mimic": {
+      "additionalProperties": false,
+      "description": "Coupled joint (gears / rack_pinion): q = multiplier * q_joint + offset; URDF <mimic>.",
+      "properties": {
+        "joint": {
+          "title": "Joint",
+          "type": "string"
+        },
+        "multiplier": {
+          "default": 1.0,
+          "title": "Multiplier",
+          "type": "number"
+        },
+        "offset": {
+          "default": 0.0,
+          "title": "Offset",
+          "type": "number"
+        }
+      },
+      "required": [
+        "joint"
+      ],
+      "title": "Mimic",
+      "type": "object"
+    },
+    "Param": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "title": "Value",
+          "type": "number"
+        },
+        "min": {
+          "title": "Min",
+          "type": "number"
+        },
+        "max": {
+          "title": "Max",
+          "type": "number"
+        },
+        "unit": {
+          "default": "mm",
+          "enum": [
+            "mm",
+            "deg",
+            "rad",
+            "g",
+            "-"
+          ],
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "min",
+        "max"
+      ],
+      "title": "Param",
+      "type": "object"
+    },
+    "PartSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "material": {
+          "default": "PETG",
+          "enum": [
+            "PETG",
+            "PLA"
+          ],
+          "title": "Material",
+          "type": "string"
+        },
+        "intent": {
+          "title": "Intent",
+          "type": "string"
+        },
+        "connectors": {
+          "items": {
+            "$ref": "#/$defs/Connector"
+          },
+          "title": "Connectors",
+          "type": "array"
+        },
+        "bbox_mm": {
+          "anyOf": [
+            {
+              "maxItems": 3,
+              "minItems": 3,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bbox Mm"
+        }
+      },
+      "required": [
+        "name",
+        "intent"
+      ],
+      "title": "PartSpec",
+      "type": "object"
+    },
+    "Spec": {
+      "additionalProperties": false,
+      "description": "Requirements agent output (spec.json).",
+      "properties": {
+        "pack": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pack"
+        },
+        "dof": {
+          "minimum": 0,
+          "title": "Dof",
+          "type": "integer"
+        },
+        "reach_mm": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reach Mm"
+        },
+        "payload_g": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payload G"
+        },
+        "components_requested": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Components Requested",
+          "type": "array"
+        },
+        "electronics": {
+          "anyOf": [
+            {
+              "const": "generic",
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "default": "generic",
+          "title": "Electronics"
+        },
+        "print_profile": {
+          "default": "generic_fdm",
+          "title": "Print Profile",
+          "type": "string"
+        },
+        "material": {
+          "default": "PETG",
+          "enum": [
+            "PETG",
+            "PLA"
+          ],
+          "title": "Material",
+          "type": "string"
+        },
+        "notes": {
+          "default": "",
+          "title": "Notes",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dof"
+      ],
+      "title": "Spec",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "units": {
+      "const": "mm",
+      "default": "mm",
+      "title": "Units",
+      "type": "string"
+    },
+    "ground": {
+      "title": "Ground",
+      "type": "string"
+    },
+    "requirements": {
+      "$ref": "#/$defs/Spec"
+    },
+    "params": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Param"
+      },
+      "title": "Params",
+      "type": "object"
+    },
+    "components": {
+      "items": {
+        "$ref": "#/$defs/ComponentUse"
+      },
+      "title": "Components",
+      "type": "array"
+    },
+    "parts": {
+      "items": {
+        "$ref": "#/$defs/PartSpec"
+      },
+      "title": "Parts",
+      "type": "array"
+    },
+    "joints": {
+      "items": {
+        "$ref": "#/$defs/Joint"
+      },
+      "title": "Joints",
+      "type": "array"
+    },
+    "derived": {
+      "items": {
+        "$ref": "#/$defs/Derived"
+      },
+      "title": "Derived",
+      "type": "array"
+    },
+    "dof": {
+      "minimum": 0,
+      "title": "Dof",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "ground",
+    "requirements",
+    "parts",
+    "dof"
+  ],
+  "title": "AssemblyPlan",
+  "type": "object"
+}

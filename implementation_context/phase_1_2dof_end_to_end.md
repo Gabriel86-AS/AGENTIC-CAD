@@ -2,7 +2,7 @@
 
 ```yaml
 id: P1
-status: not_started
+status: in_progress
 duration_estimate: 21 working days
 depends_on: [P0 exit]
 blocks: [P2]
@@ -160,7 +160,7 @@ Metrics per run: pass/fail per gate, DoF-0 rate, iterations per part, plan revis
 | T1.1 | `schemas/` + JSON schema export | P0 |
 | T1.2 | SDK core v0 + unit tests per call (each test asserts DoF = 0 and expression binding) | T1.1 |
 | T1.3 | `profiles/generic_fdm.yaml`, `materials.yaml` | — |
-| T1.4 | Cards: MG996R (from P0), generic bay, ESP32 DevKit, PCA9685 envelopes, M3 screw/insert | T1.2 |
+| T1.4 | Cards: MG996R (from P0, + horn interface), generic bay, ESP32 DevKit, PCA9685 envelopes, M3 screw/insert; SDK `mate_to` + `electronics_bay` (moved from T1.2: need card data) | T1.2 |
 | T1.5 | Harness tools `compile_part`, `probe_part`, signal formatter | T1.2 |
 | T1.6 | Assembly builder (aligner + optional Assembly WB writer) | T1.5 |
 | T1.7 | Validators L0–L3, L5, L6 (+ plan-level), L7-basic | T1.6 |

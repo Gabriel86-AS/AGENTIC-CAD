@@ -1,0 +1,81 @@
+{
+  "additionalProperties": false,
+  "description": "One line of jobs/<id>/trace.jsonl. Hashes are sha256 of the canonical JSON input/output.",
+  "properties": {
+    "t": {
+      "title": "T",
+      "type": "number"
+    },
+    "agent": {
+      "title": "Agent",
+      "type": "string"
+    },
+    "model": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model"
+    },
+    "tool": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tool"
+    },
+    "input_hash": {
+      "default": "",
+      "title": "Input Hash",
+      "type": "string"
+    },
+    "output_hash": {
+      "default": "",
+      "title": "Output Hash",
+      "type": "string"
+    },
+    "tokens_in": {
+      "default": 0,
+      "title": "Tokens In",
+      "type": "integer"
+    },
+    "tokens_out": {
+      "default": 0,
+      "title": "Tokens Out",
+      "type": "integer"
+    },
+    "cost_usd": {
+      "default": 0.0,
+      "title": "Cost Usd",
+      "type": "number"
+    },
+    "freecad_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Freecad Version"
+    }
+  },
+  "required": [
+    "t",
+    "agent"
+  ],
+  "title": "TraceEvent",
+  "type": "object"
+}

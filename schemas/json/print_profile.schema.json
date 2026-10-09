@@ -1,0 +1,139 @@
+{
+  "$defs": {
+    "ScrewHoles": {
+      "additionalProperties": false,
+      "properties": {
+        "clearance": {
+          "exclusiveMinimum": 0,
+          "title": "Clearance",
+          "type": "number"
+        },
+        "tap": {
+          "exclusiveMinimum": 0,
+          "title": "Tap",
+          "type": "number"
+        }
+      },
+      "required": [
+        "clearance",
+        "tap"
+      ],
+      "title": "ScrewHoles",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "process": {
+      "const": "fdm",
+      "title": "Process",
+      "type": "string"
+    },
+    "build_volume_mm": {
+      "maxItems": 3,
+      "minItems": 3,
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "title": "Build Volume Mm",
+      "type": "array"
+    },
+    "nozzle_mm": {
+      "exclusiveMinimum": 0,
+      "title": "Nozzle Mm",
+      "type": "number"
+    },
+    "layer_mm": {
+      "exclusiveMinimum": 0,
+      "title": "Layer Mm",
+      "type": "number"
+    },
+    "line_width_mm": {
+      "exclusiveMinimum": 0,
+      "title": "Line Width Mm",
+      "type": "number"
+    },
+    "wall_count": {
+      "minimum": 1,
+      "title": "Wall Count",
+      "type": "integer"
+    },
+    "infill": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Infill",
+      "type": "number"
+    },
+    "min_wall_mm": {
+      "exclusiveMinimum": 0,
+      "title": "Min Wall Mm",
+      "type": "number"
+    },
+    "min_feature_mm": {
+      "exclusiveMinimum": 0,
+      "title": "Min Feature Mm",
+      "type": "number"
+    },
+    "max_overhang_deg": {
+      "exclusiveMaximum": 90,
+      "exclusiveMinimum": 0,
+      "title": "Max Overhang Deg",
+      "type": "number"
+    },
+    "max_bridge_mm": {
+      "minimum": 0,
+      "title": "Max Bridge Mm",
+      "type": "number"
+    },
+    "fits": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "title": "Fits",
+      "type": "object"
+    },
+    "horizontal_hole_extra_mm": {
+      "minimum": 0,
+      "title": "Horizontal Hole Extra Mm",
+      "type": "number"
+    },
+    "screws": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ScrewHoles"
+      },
+      "title": "Screws",
+      "type": "object"
+    }
+  },
+  "required": [
+    "id",
+    "process",
+    "build_volume_mm",
+    "nozzle_mm",
+    "layer_mm",
+    "line_width_mm",
+    "wall_count",
+    "infill",
+    "min_wall_mm",
+    "min_feature_mm",
+    "max_overhang_deg",
+    "max_bridge_mm",
+    "fits",
+    "horizontal_hole_extra_mm",
+    "screws"
+  ],
+  "title": "PrintProfile",
+  "type": "object"
+}

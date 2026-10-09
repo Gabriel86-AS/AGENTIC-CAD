@@ -1,0 +1,96 @@
+{
+  "additionalProperties": false,
+  "description": "Requirements agent output (spec.json).",
+  "properties": {
+    "pack": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pack"
+    },
+    "dof": {
+      "minimum": 0,
+      "title": "Dof",
+      "type": "integer"
+    },
+    "reach_mm": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reach Mm"
+    },
+    "payload_g": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Payload G"
+    },
+    "components_requested": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Components Requested",
+      "type": "array"
+    },
+    "electronics": {
+      "anyOf": [
+        {
+          "const": "generic",
+          "type": "string"
+        },
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      ],
+      "default": "generic",
+      "title": "Electronics"
+    },
+    "print_profile": {
+      "default": "generic_fdm",
+      "title": "Print Profile",
+      "type": "string"
+    },
+    "material": {
+      "default": "PETG",
+      "enum": [
+        "PETG",
+        "PLA"
+      ],
+      "title": "Material",
+      "type": "string"
+    },
+    "notes": {
+      "default": "",
+      "title": "Notes",
+      "type": "string"
+    }
+  },
+  "required": [
+    "dof"
+  ],
+  "title": "Spec",
+  "type": "object"
+}
