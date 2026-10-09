@@ -3,7 +3,9 @@ kind: fastener.insert
 verified: false            # vendor-recommended hole for common M3 x 5.7 brass heat-set inserts; check yours
 source: >-
   Common M3 x 5.7 mm knurled brass heat-set insert (e.g. Ruthex RX-M3x5.7): recommended printed
-  hole 4.0 mm, at least 1 mm deeper than the insert so displaced plastic has room.
+  hole 4.0 mm, at least 1 mm deeper than the insert so displaced plastic has room. Cross-checked
+  2026-10-09: Accu pilot-hole chart lists 4.0 mm (-0/+0.1) for M3 inserts (4.4 mm OD) in PLA/PETG/ABS;
+  CNC Kitchen: straight blind hole ~1 mm deeper than the insert. Printers print holes undersize: test once.
 mass_kg: 0.0005
 
 # Used by hole(fit="insert_m3"): diameter hole_d, depth hole_depth unless the call passes depth.

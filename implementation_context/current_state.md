@@ -4,7 +4,7 @@
 updated: 2026-10-09
 plan_version: v0.4 (IMPLEMENTATION_PLAN.md)
 current_phase: P1
-current_phase_status: in_progress; T1.1-T1.7 done (P0 closed except O11 live API run)
+current_phase_status: in_progress; T1.1-T1.7 done (P0 closed; O11 deferred to P5)
 next_action: T1.10 servo_u_bracket (pack composite) and T1.8 exporter (STL from mesh_parts, inertials from validate/masses.py + sweep mass props, URDF, D1/D2/D4; D2 also cross-checks validate/statics.py against Pinocchio RNEA), then T1.12 golden B1-3. Measure unverified card values when hardware is at hand (O12)
 code_written: harness/ (worker protocol + tests), spikes/run.py, spikes/s01-s10, spikes/drivers/s10.py, components/ (card.py with card expressions, build.py, cards: servo/mg996r (+ horn), electronics/generic_bay, esp32_devkit, pca9685, fastener/m3_screw, m3_insert; servo_mg996r generator), tests/test_components.py, llm/ (tools, backend, agent_sdk_backend, claude_api_backend), spikes/s11_llm.py, spikes/urdf_1joint/, tests/test_llm_permissions.py, schemas/ (plan, signal, profile, names, export → schemas/json/), profiles/ (generic_fdm, materials), tests/test_schemas.py, sdk/ (expr, sketch, part, errors), tests/test_sdk.py + tests/freecad/sdk_cases.py, docs/sdk.md, harness/ (lint L0, part_ops worker ops, tools compile_part/probe_part, feedback), tests/test_harness_tools.py, assembly/ (kinematics, writer, builder), tests/test_assembly.py + tests/freecad/assembly_reopen.py, assembly/owners.py, validate/ (poses, statics, masses, plan_check, sweep worker ops, assembly_check, printability), tests/test_validate.py (120 tests total)
 git: branch p0-env-spikes, commits 2ce73d4, 7ee20dd (P0 closure), 82da443 (T1.1-T1.3), 1800634 (D28 revised), 175e1e7 (T1.4), 978bae1 (T1.5), 7b1e938 (T1.6), T1.7 commit; not pushed
@@ -43,12 +43,12 @@ flowchart LR
 | System Python | 3.14 at `C:/Python314` | **don't use** for orchestrator |
 | uv | 0.12.24 | ok → orchestrator venv (Python 3.12) |
 | WSL | `Ubuntu`, `Ubuntu-22.04` | present; intended for ROS 2 tools / pinocchio fallback |
-| Docker | 29.4.0 installed, **daemon not running** | start Docker Desktop when needed |
+| Docker | 29.4.0, Docker Desktop running 2026-10-09; image `agenticcad-ros:jazzy` present | ok |
 | conda | not installed | not needed unless pinocchio lacks a Windows wheel |
 | Assembly / pivy import headless | `JointObject`, `UtilsAssembly`, `pivy` import; joints solve | ok (S1) |
 | Orchestrator venv | uv-managed CPython 3.12.15, `python-preference = only-managed` (LibreOffice 3.12 on PATH breaks venvs) | ok |
 | WSL | default distro `docker-desktop` (no bash) ⇒ always `wsl -d <distro>`; Ubuntu-22.04 has ROS 2 Humble (`check_urdf`), no gz / pinocchio; Ubuntu 26.04 bare; sudo needs a password | Humble fallback only |
-| LLM auth | Claude Code subscription login present; no `ANTHROPIC_API_KEY` | Agent SDK ok; API backend offline (O11) |
+| LLM auth | Claude Code subscription login present; no `ANTHROPIC_API_KEY` (not needed before P5) | Agent SDK ok; API backend offline (O11, P5) |
 | pinocchio | no Windows wheel (`cmeel-assimp`) | → Docker image (D24) |
 
 ## 4. Task board (current phase: P1)
@@ -68,7 +68,7 @@ flowchart LR
 | T1.11 | Bench runner + B1-6, B1-7 | todo |
 | T1.12 | Golden B1-3 (no LLM) — first milestone | todo |
 
-P0 leftovers: O11 (live ClaudeAPIBackend run).
+P0 leftovers: none blocking (O11 deferred to P5).
 
 ## 5. Decision log (do not re-litigate)
 
@@ -113,10 +113,10 @@ P0 leftovers: O11 (live ClaudeAPIBackend run).
 
 | # | Item | Resolved by |
 |---|---|---|
-| O11 | `ANTHROPIC_API_KEY` for the live ClaudeAPIBackend run (offline tests pass) | user |
+| O11 | Live ClaudeAPIBackend run. **Deferred to P5** (user 2026-10-09): prototype and bench run on the Agent SDK + subscription (D4); the API backend stays offline-tested until productization | P5 |
 | O9 | Assembly WB `Gears`/`RackPinion` headless | P3 S12 |
-| O13 | `spikes/s11_llm.py` prompts a raw FreeCAD script; compile_part now requires SDK programs (L0). Update the prompt before re-running S11 live | with O11 |
-| O12 | Unverified cards (`verified: false`): MG996R (incl. horn disc), ESP32 DevKit, PCA9685 hole pitch, M3 insert hole. Measure samples; all values are Params, so fixes are card edits | user (hardware) |
+| O13 | `spikes/s11_llm.py` prompts a raw FreeCAD script; compile_part now requires SDK programs (L0). Update the prompt and re-run S11 live on the Agent SDK backend | T1.9 |
+| O12 | Datasheet pass 2026-10-09: ESP32 DevKitC (Espressif drawing) and PCA9685 (Adafruit fab print) now `verified: true`; M3 insert hole matches vendor charts. Still unverified: MG996R hole pitch, flange height, shaft offset, horn disc (no vendor drawing exists); travel per datasheet ~120 deg vs card ±90 deg. Measure a sample when available | user (hardware) |
 
 ## 7. File map
 

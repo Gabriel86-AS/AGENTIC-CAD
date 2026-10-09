@@ -1,10 +1,11 @@
 id: electronics/esp32_devkit
 kind: electronics.board
-verified: false            # nominal values for an ESP32-DevKitC-style 38-pin board; measure your board
+verified: true             # outline + header span from the Espressif DevKitC V4 drawing (2026-10-09); clones may differ
 source: >-
-  ESP32-DevKitC V4-style board, about 54.4 x 27.9 mm, two 19-pin 2.54 mm header rows 25.4 mm apart,
-  USB connector on one short edge. These boards have no mounting holes; clones and the 30-pin
-  "DevKit V1" differ (about 51 x 28 mm). Values are nominal, not from a drawing.
+  Espressif ESP32-DevKitC V4 board-dimensions drawing (docs.espressif.com, get-started-devkitc,
+  "Board Dimensions"): PCB 54.4 x 27.9 mm, header rows 48.2 mm end to end; two 19-pin 2.54 mm rows
+  25.4 mm apart, USB on one short edge. No mounting holes. Clones and the 30-pin "DevKit V1" differ
+  (about 51 x 28 mm). Heights (top_h, pin_below, USB plug) are allowances, not from the drawing.
 mass_kg: 0.010
 
 # Card frame = board_mount connector: origin on the host surface, centred on the board outline,
@@ -17,7 +18,7 @@ params_mm:
   pcb_t: 1.6
   top_h: 5.0               # tallest top-side part (module shield, USB receptacle, buttons) + margin
   pin_row_pitch: 25.4      # header rows, centre to centre (y)
-  pin_row_l: 48.3          # 19 pins x 2.54
+  pin_row_l: 48.2          # header span, Espressif drawing
   pin_row_w: 3.0           # pit width per row (header plastic 2.54; rows sit at the board edge)
   pin_below: 9.0           # header plastic + pin length below the PCB, + margin
   usb_z: 1.5               # USB connector axis above the PCB top

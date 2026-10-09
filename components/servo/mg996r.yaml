@@ -4,6 +4,11 @@ verified: false            # becomes true after measuring physical samples
 source: >-
   Public listings agree on the 40.7 x 19.7 x 42.9 mm envelope; flange height, hole pattern and
   shaft offset are nominal standard-size-servo values, not from a vendor drawing. Measure samples.
+  Tower Pro datasheet (MG996R_Tower-Pro.pdf, 2014) cross-check 2026-10-09: 55 g, 40.7 x 19.7 x 42.9 mm,
+  stall 9.4 kgf.cm @ 4.8 V / 11 kgf.cm @ 6 V, 0.17 / 0.14 s per 60 deg, stall 2.5 A @ 6 V, travel
+  "approximately 120 degrees" (most units reach ~180 deg with 500-2500 us pulses). Its sketch (approx.)
+  shows 53.6 flange span, 40.3 body, 26.6 bottom -> flange, 36.6 bottom -> case top, 47.6 with horn,
+  no hole pitch; within the profile clearance of the values below except flange_l (54.6).
 variants_note: many MG996R clones differ by ~0.5 mm; interface features use the print profile's clearance
 mass_kg: 0.055
 
@@ -33,8 +38,8 @@ params_mm:
 actuation:
   type: revolute
   range_deg: [-90, 90]                              # typical; many units travel ~180 deg total
-  stall_torque_Nm: { at_4_8V: 0.94, at_6V: 1.08 }   # datasheet values; verify per supplier
-  speed_rad_s: { at_4_8V: 6.0, at_6V: 7.0 }         # approx.
+  stall_torque_Nm: { at_4_8V: 0.92, at_6V: 1.08 }   # Tower Pro datasheet 9.4 / 11 kgf.cm
+  speed_rad_s: { at_4_8V: 6.16, at_6V: 7.48 }       # datasheet 0.17 / 0.14 s per 60 deg
   derating: 0.5                                     # design to <= 50% of stall torque
 electrical: { voltage_V: [4.8, 7.2], stall_current_A: 2.5 }   # approx.; sizes the power note
 

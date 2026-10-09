@@ -1,21 +1,23 @@
 id: electronics/pca9685
 kind: electronics.board
-verified: false            # nominal values for an Adafruit-style 16-channel PWM driver; measure your board
+verified: true             # outline + holes from the Adafruit #815 fabrication print (2026-10-09); clones may differ
 source: >-
   16-channel 12-bit PWM / servo driver (PCA9685, Adafruit #815 layout): about 62.5 x 25.4 mm,
   four M2.5 corner holes, 16 3-pin servo headers on top, power terminal block on one long edge.
-  Hole pitch is nominal (0.1 in inset from each edge), not from a drawing. Clones differ.
+  Adafruit fabrication print (learn.adafruit.com/16-channel-pwm-servo-driver/downloads): board
+  2.45 x 1.0 in, holes 2.5 mm, centres 0.13 in from the left / bottom edges, pitch 2.20 x 0.75 in
+  (2.33 - 0.13, 0.88 - 0.13). The pattern sits 0.005 in off the board centre in x (ignored). Clones differ.
 mass_kg: 0.009
 
 # Card frame = board_mount connector: origin on the host surface, centred on the hole pattern,
 # +z out of the surface, +x along the long edge. The board sits on four standoffs (h above z = 0)
 # with M2.5 screws tapped into them; servo leads leave upward.
 params_mm:
-  pcb_l: 62.5
+  pcb_l: 62.2               # 2.45 in
   pcb_w: 25.4
   pcb_t: 1.6
-  hole_pitch_x: 55.9
-  hole_pitch_y: 19.1
+  hole_pitch_x: 55.88        # 2.20 in
+  hole_pitch_y: 19.05        # 0.75 in
   standoff_d: 5.0
   standoff_h: 5.0          # clears through-hole pins under the board (~2.5)
   top_h: 16.0              # 3-pin headers (8.5) + servo plugs + margin
