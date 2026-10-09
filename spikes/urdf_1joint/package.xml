@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>urdf_1joint</name>
+  <version>0.0.1</version>
+  <description>T0.7 spike: hand-written 1-joint URDF (MG996R + arm bar)</description>
+  <maintainer email="noreply@example.com">AgenticCAD</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <exec_depend>urdf</exec_depend>
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

@@ -1,0 +1,30 @@
+[project]
+name = "agenticcad"
+version = "0.0.1"
+description = "Agentic system that generates parametric FreeCAD models and URDF packages"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "anthropic",
+    "claude-agent-sdk",
+    "pydantic>=2",
+    "trimesh",
+    "manifold3d",
+    "pyvista",
+    "lib3mf",
+    "yourdfpy",
+    "lxml",
+    "pyyaml",
+]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.uv]
+# Orchestrator code lives in top-level dirs (harness/, llm/, ...); nothing to build yet.
+package = false
+# A LibreOffice-bundled 3.12 on PATH breaks venv creation; use uv's own interpreters.
+python-preference = "only-managed"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

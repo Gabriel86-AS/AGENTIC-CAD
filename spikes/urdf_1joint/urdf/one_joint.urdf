@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<!-- T0.7: hand-written 1-joint URDF. Conventions (P0 §4): metres / kg / rad; a child link's frame is
+     its joint connector frame, so every joint axis is "0 0 1".
+     base_link = MG996R card frame (body_mount: flange underside, centred on the holes, +z to shaft).
+     arm_link  = horn connector frame on the spline tip; 60 x 10 x 4 mm PETG bar along +x.
+     Joint origin = card output_shaft connector [shaft_x, 0, spline_top] = [10, 0, 16.9] mm.
+     Limits from the card: range +-90 deg; effort = 1.08 N m stall (6 V) x 0.5 derating; velocity 7 rad/s.
+     Inertials from spikes/urdf_1joint/make_meshes.py (S9 rules); off-diagonals < 1e-20 written as 0. -->
+<robot name="urdf_1joint">
+  <link name="base_link">
+    <inertial>
+      <origin xyz="0.0000504 0 -0.0071917" rpy="0 0 0"/>
+      <mass value="0.055"/>
+      <inertia ixx="8.1369e-06" ixy="0" ixz="-5.8704e-08" iyy="1.43467e-05" iyz="0" izz="9.7541e-06"/>
+    </inertial>
+    <visual>
+      <geometry><mesh filename="package://urdf_1joint/meshes/mg996r.stl"/></geometry>
+    </visual>
+    <collision>
+      <geometry><mesh filename="package://urdf_1joint/meshes/mg996r.stl"/></geometry>
+    </collision>
+  </link>
+
+  <joint name="j_shaft" type="revolute">
+    <parent link="base_link"/>
+    <child link="arm_link"/>
+    <origin xyz="0.010 0 0.0169" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.5707963" upper="1.5707963" effort="0.54" velocity="7.0"/>
+  </joint>
+
+  <link name="arm_link">
+    <inertial>
+      <origin xyz="0.025 0 0.002" rpy="0 0 0"/>
+      <mass value="0.003048"/>
+      <inertia ixx="2.9464e-08" ixy="0" ixz="0" iyy="9.18464e-07" iyz="0" izz="9.398e-07"/>
+    </inertial>
+    <visual>
+      <geometry><mesh filename="package://urdf_1joint/meshes/arm.stl"/></geometry>
+    </visual>
+    <collision>
+      <geometry><mesh filename="package://urdf_1joint/meshes/arm.stl"/></geometry>
+    </collision>
+  </link>
+</robot>

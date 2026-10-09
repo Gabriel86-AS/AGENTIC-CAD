@@ -1,0 +1,42 @@
+id: electronics/generic_bay
+kind: electronics.bay
+verified: true             # a reservation, not a purchased part: nothing to measure
+source: >-
+  Plan §3.6. Usable volume fits Arduino Uno-size (68.6 x 53.4), ESP32 dev boards or a 16-channel
+  PWM servo driver (~62 x 25). Swapped for named board cards when the user specifies electronics.
+mass_kg: 0.060             # allowance for a board + driver + wiring (L6 torque budget)
+
+# Card frame = bay_mount connector: origin at the centre of the mounting-plate top face,
+# +z up into the usable volume, +x toward the cable exit (default: toward the arm).
+params_mm:
+  usable_l: 75.0           # usable volume (x)
+  usable_w: 60.0           # (y)
+  usable_h: 25.0           # (z), above the standoffs
+  standoff_h: 6.0          # board underside above the plate
+  standoff_d: 6.0
+  slot_pitch_x: 58.0       # slotted standoff pattern: 4 slots, long axis x
+  slot_pitch_y: 44.0
+  slot_len: 12.0           # slot travel along x, so the pattern accepts several boards
+  slot_w: 3.2              # M3 clearance
+  cable_exit_w: 20.0
+  cable_exit_h: 12.0
+  connector_cut_w: 15.0    # one external connector cut-out (USB / barrel jack)
+  connector_cut_h: 10.0
+
+connectors:
+  bay_mount:  { o: [0, 0, 0],                 z: [0, 0, 1], x: [1, 0, 0], label: ebay_mount }
+
+interfaces:
+  keep_out:
+    - { centre_xy: [0, 0], size: [usable_l, usable_w, usable_h], bottom_z: standoff_h, reason: board volume }
+  standoffs:  { pattern: rect_slotted, pitch: [slot_pitch_x, slot_pitch_y], slot_len: slot_len, slot_w: slot_w, d: standoff_d, h: standoff_h, screw: M3 }
+  openings:
+    - { kind: cable_exit,    face: "+x", size: [cable_exit_w, cable_exit_h] }
+    - { kind: connector_cut, face: "-x", size: [connector_cut_w, connector_cut_h] }
+    - { kind: vent_slots,    face: "+z", note: "lid or enclosing wall; count from the print profile" }
+
+power_note: >-
+  Servos draw roughly 2.5 A each at stall (MG996R, approximate). Use an external 5-6 V supply sized
+  for the combined stall current; do not power servos from USB or a board regulator.
+
+model: null                # built by the SDK from interfaces (plate + standoffs); no generator in P0

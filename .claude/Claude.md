@@ -1,0 +1,1 @@
+go to C:\Users\gabri\OneDrive\Desktop\Code\AgenticCAD\AGENTS.md
