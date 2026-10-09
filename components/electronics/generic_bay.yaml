@@ -26,17 +26,20 @@ params_mm:
 connectors:
   bay_mount:  { o: [0, 0, 0],                 z: [0, 0, 1], x: [1, 0, 0], label: ebay_mount }
 
+# Read by the SDK's mount() / electronics_bay(); all in the card frame. Electronics cards share:
+#   volume     board + component envelope; electronics_bay() walls go around it (+ margin), up to its top
+#   standoffs  bosses from z = 0 to h (rect: tapped holes; rect_slotted: slot + nut trap under the floor)
+#   openings   wall cut-outs on a face of the bay: size [w, h] centred on the face, from bottom_z up
 interfaces:
-  keep_out:
-    - { centre_xy: [0, 0], size: [usable_l, usable_w, usable_h], bottom_z: standoff_h, reason: board volume }
+  volume:     { centre_xy: [0, 0], size: [usable_l, usable_w, usable_h], bottom_z: standoff_h, reason: board volume }
   standoffs:  { pattern: rect_slotted, pitch: [slot_pitch_x, slot_pitch_y], slot_len: slot_len, slot_w: slot_w, d: standoff_d, h: standoff_h, screw: M3 }
   openings:
-    - { kind: cable_exit,    face: "+x", size: [cable_exit_w, cable_exit_h] }
-    - { kind: connector_cut, face: "-x", size: [connector_cut_w, connector_cut_h] }
-    - { kind: vent_slots,    face: "+z", note: "lid or enclosing wall; count from the print profile" }
+    - { kind: cable_exit,    face: "+x", size: [cable_exit_w, cable_exit_h], bottom_z: 0 }
+    - { kind: connector_cut, face: "-x", size: [connector_cut_w, connector_cut_h], bottom_z: standoff_h }
+  vent_note: "vent slots belong in the lid or an enclosing wall; not cut by electronics_bay() in v0"
 
 power_note: >-
   Servos draw roughly 2.5 A each at stall (MG996R, approximate). Use an external 5-6 V supply sized
   for the combined stall current; do not power servos from USB or a board regulator.
 
-model: null                # built by the SDK from interfaces (plate + standoffs); no generator in P0
+model: null                # built by the SDK from interfaces (electronics_bay); no generator

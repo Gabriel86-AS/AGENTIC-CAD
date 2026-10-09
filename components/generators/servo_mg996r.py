@@ -17,7 +17,7 @@ import FreeCAD as App
 import Part
 import Sketcher
 
-from components.card import connectors, load_card
+from components.card import connectors, freecad_expr, load_card
 
 card = load_card(request["card"])
 P = card["params_mm"]
@@ -135,8 +135,8 @@ for name, c in resolved.items():
     lcs = part.newObject("App::LocalCoordinateSystem", name)
     lcs.Placement = App.Placement(App.Vector(*c["o"]), rotation(c["z"], c["x"]))
     for axis, v in zip("xyz", raw[name]["o"]):
-        if isinstance(v, str):
-            lcs.setExpression(".Placement.Base." + axis, ("-" if v.startswith("-") else "") + "Params." + v.lstrip("-"))
+        if isinstance(v, str):  # param name or card expression
+            lcs.setExpression(".Placement.Base." + axis, freecad_expr(card, v))
     lcs.addProperty("App::PropertyString", "ConnectorLabel", "AgenticCAD").ConnectorLabel = c.get("label", "")
 
 doc.recompute()

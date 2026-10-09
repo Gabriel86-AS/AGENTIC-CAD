@@ -23,6 +23,12 @@ params_mm:
   shaft_x: 10.0            # output shaft axis offset from the hole-pattern centre (x)
   spline_d: 5.8            # 25T spline outer diameter
   spline_top: 16.9         # flange underside -> spline tip (overall height 42.9)
+  # Round (disc) horn, bundled-style; nominal values, NOT measured: verify against your horn.
+  horn_disc_d: 24.0        # disc diameter
+  horn_disc_t: 2.0         # disc thickness
+  horn_top_above_tip: 1.0  # disc top face above the spline tip (horn screw head sits in its counterbore)
+  horn_bolt_circle_d: 16.0 # 4 holes for M2 self-tapping screws into the driven part
+  horn_access_d: 6.0       # screwdriver access to the centre horn screw, through the driven part
 
 actuation:
   type: revolute
@@ -36,12 +42,16 @@ electrical: { voltage_V: [4.8, 7.2], stall_current_A: 2.5 }   # approx.; sizes t
 connectors:
   body_mount:   { o: [0, 0, 0],                z: [0, 0, 1], x: [1, 0, 0], label: servo_mount }
   output_shaft: { o: [shaft_x, 0, spline_top], z: [0, 0, 1], x: [1, 0, 0], label: servo_horn }
+  # Horn disc underside = the face the driven part rests on (its disc recess is cut above it);
+  # same axis as output_shaft, so a joint may mate either one.
+  horn:         { o: [shaft_x, 0, "spline_top + horn_top_above_tip - horn_disc_t"], z: [0, 0, 1], x: [1, 0, 0], label: servo_horn_face }
 
-# Read by the SDK's mount() / mate_to(); all in the card frame.
+# Read by the SDK's mount() / mate_to(); all in the card frame, except `horn` (in its `at` connector frame).
 interfaces:
   mount_pocket:    { centre_xy: [0, 0], size: [body_l, body_w, body_below], top_z: 0 }   # case drops in from z = 0
   mount_holes:     { pattern: rect, pitch: [hole_pitch_x, hole_pitch_y], screw: M4, z: 0 }
   output_spline:   { teeth: 25, d_outer: spline_d, at: output_shaft }
+  horn:            { kind: disc_horn, at: horn, disc_d: horn_disc_d, disc_t: horn_disc_t, bolt_circle_d: horn_bolt_circle_d, bolts: 4, screw: M2, access_d: horn_access_d }   # read by mate_to()
   keep_out:
     - { box_min: [-35.35, -5.0, -26.0], box_max: [-20.35, 5.0, -18.0], reason: cable exit (approximate) }
 

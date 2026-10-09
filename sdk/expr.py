@@ -95,6 +95,17 @@ class Q:
         return Q(self.value / k, "(%s / %s)" % (self.expr, fmt(k)), self.unit, self.plan)
 
 
+def qmax(*qs: Q) -> Q:
+    """Largest of several Qs (same unit), as a FreeCAD `max(a; b; ...)` expression."""
+    units = {q.unit for q in qs}
+    if len(units) != 1:
+        raise TypeError("qmax: unit mismatch %r" % (qs,))
+    plan = {}
+    for q in qs:
+        plan.update(q.plan)
+    return Q(max(q.value for q in qs), "max(%s)" % "; ".join(q.expr for q in qs), qs[0].unit, plan)
+
+
 def is_num(v) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
 

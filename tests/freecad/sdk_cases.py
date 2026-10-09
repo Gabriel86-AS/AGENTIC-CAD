@@ -196,6 +196,69 @@ def save_reopen():
     return out
 
 
+def inside(part, *pts):
+    """Is each part-frame point inside the body solid?"""
+    sh = part.body.Shape
+    return [sh.isInside(App.Vector(*p), 1e-6, True) for p in pts]
+
+
+@case
+def mate_to():
+    """Horn-driven plate: disc recess, M2 tap holes (into the part) and screwdriver access on the axis."""
+    sdk.configure(components={"s_shoulder": "servo/mg996r"})
+    try:
+        part, p = plate("mate_case", w=60, d=40, t=10)
+        part.connector("shoulder_horn", origin=(0, 0, 0), z=(0, 0, 1), x=(1, 0, 0), label="servo_horn_face")
+        part.mate_to("s_shoulder.horn", at="shoulder_horn")
+        return run(part, {"s_shoulder_horn_disc_t": 3})
+    finally:
+        sdk.configure()
+
+
+@case
+def bay_generic():
+    part = Part("bay_generic_case")
+    part.connector("bay", origin=(0, 0, 0), z=(0, 0, 1), x=(1, 0, 0), label="ebay_mount")
+    part.electronics_bay("electronics/generic_bay", at="bay")
+    out = run(part, {"bay_generic_bay_margin": 3, "m3_screw_nut_m": 3.0})
+    out["floor_t"] = {"before": out["report"]["params"]["bay_generic_bay_floor_t"]["current"],
+                      "after": part.report()["params"]["bay_generic_bay_floor_t"]["current"]}
+    return out
+
+
+@case
+def bay_pca9685():
+    part = Part("bay_pca_case")
+    part.connector("bay", origin=(0, 0, 0), z=(0, 0, 1), x=(1, 0, 0), label="board_mount")
+    part.electronics_bay("electronics/pca9685", at="bay")
+    return run(part, {"pca9685_standoff_h": 6})
+
+
+@case
+def bay_esp32():
+    """ESP32 recess + pin pits + USB plug cut through the -x wall; the floor grows with the pits."""
+    part = Part("bay_esp32_case")
+    part.connector("bay", origin=(0, 0, 0), z=(0, 0, 1), x=(1, 0, 0), label="board_mount")
+    part.electronics_bay("electronics/esp32_devkit", at="bay")
+    probes = [(0, 12.7, -5), (0, 0, -5), (-30.4, 0, 2), (-30.4, 10, 2), (0, 0, -1)]
+    # pin pit, floor between pits, USB cut in the -x wall, -x wall beside it, board recess
+    out = run(part, {})
+    out["probes"] = inside(part, *probes)
+    out["floor_t"] = out["report"]["params"]["bay_esp32_devkit_floor_t"]["current"]
+    part.set_param("esp32_devkit_pin_below", 10)
+    out["after_pin_below"] = {"gates": part.report()["gates"], "zmin": measure(part)["bbox"][2]}
+    return out
+
+
+@case
+def insert_counterbore():
+    part, p = plate("fastener_case")
+    top = part.datum("top", plane="XY", offset=p.thick)
+    part.hole(top, at=(10, 10), fit="insert_m3", name="insert")
+    part.hole(top, at=(-10, -10), fit="clearance_m3", counterbore=True, name="bolt")
+    return run(part, {"m3_insert_hole_d": 4.2})
+
+
 PROGRAM = '''
 import math
 from agenticcad import Part
@@ -231,9 +294,13 @@ def errors():
         "pocket_args": lambda: _pocket_both(),
         "unknown_fit": lambda: Part("err_e").hole("XY", at=(0, 0), d=3, fit="loose"),
         "slot_degenerate": lambda: Part("err_f").sketch("sk").slot((1, 1), (1, 1), 4),
-        "not_orthogonal": lambda: Part("err_g").connector("c", (0, 0, 0), z=(0, 0, 1), x=(0, 1, 1), label="x"),
+        "not_orthogonal": lambda: Part("err_g").connector("conn", (0, 0, 0), z=(0, 0, 1), x=(0, 1, 1), label="x"),
         "duplicate_name": lambda: _dup(),
         "unknown_component": lambda: _mount_unknown(),
+        "slotted_no_host": lambda: _with_conn("err_j").mount("electronics/generic_bay", at="conn"),
+        "mate_no_horn": lambda: _with_conn("err_k").mate_to("servo/mg996r.output_shaft", at="conn"),
+        "counterbore_tap": lambda: Part("err_l").hole("XY", at=(0, 0), fit="tap_m3", counterbore=True),
+        "bay_not_electronics": lambda: _with_conn("err_m").electronics_bay("servo/mg996r", at="conn"),
     }
     out = {}
     for k, fn in attempts.items():
@@ -254,6 +321,12 @@ def _dup():
     part = Part("err_h")
     part.sketch("sk")
     part.sketch("sk")
+
+
+def _with_conn(name):
+    part = Part(name)
+    part.connector("conn", (0, 0, 0), (0, 0, 1), (1, 0, 0), "mount")
+    return part
 
 
 def _mount_unknown():

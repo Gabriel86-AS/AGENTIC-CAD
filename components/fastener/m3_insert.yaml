@@ -1,0 +1,23 @@
+id: fastener/m3_insert
+kind: fastener.insert
+verified: false            # vendor-recommended hole for common M3 x 5.7 brass heat-set inserts; check yours
+source: >-
+  Common M3 x 5.7 mm knurled brass heat-set insert (e.g. Ruthex RX-M3x5.7): recommended printed
+  hole 4.0 mm, at least 1 mm deeper than the insert so displaced plastic has room.
+mass_kg: 0.0005
+
+# Used by hole(fit="insert_m3"): diameter hole_d, depth hole_depth unless the call passes depth.
+params_mm:
+  od: 4.6                  # knurl outer diameter
+  length: 5.7
+  hole_d: 4.0
+  hole_depth: 6.7          # length + 1.0
+  min_wall: 1.6            # plastic around the insert
+
+connectors:
+  top: { o: [0, 0, 0], z: [0, 0, 1], x: [1, 0, 0], label: insert_top }
+
+interfaces:
+  hole: { d: hole_d, depth: hole_depth }
+
+model: null

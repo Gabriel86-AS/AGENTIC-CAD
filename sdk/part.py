@@ -17,11 +17,11 @@ import math
 
 import FreeCAD as App
 
-from components.card import card_path, load_card
+from components.card import card_path, evaluate, is_expr, load_card
 from profiles import load_profile
 from schemas.names import name_error
 from sdk.errors import SDKError, signal
-from sdk.expr import Q, fmt, is_num
+from sdk.expr import Q, fmt, is_num, qmax
 from sdk.sketch import Sketch
 
 PLANES = ("XY", "XZ", "YZ")
@@ -78,9 +78,11 @@ def _is_zero(v):
 
 
 def _frame_expr(o, angles):
-    """Placement expression for origin o (0|Q x3, mm) and yaw/pitch/roll angles (0|Q x3, deg)."""
-    vec = "; ".join(c.expr if isinstance(c, Q) else "0 mm" for c in o)
-    rot = " * ".join("rotation%s(%s)" % (ax, a.expr) for ax, a in zip("zyx", angles) if isinstance(a, Q))
+    """Placement expression for origin o (number|Q x3, mm) and yaw/pitch/roll angles (number|Q x3, deg).
+    Numbers stay literal: callers pass numbers only for structural values (0, a wall's face normal)."""
+    term = lambda v, u: v.expr if isinstance(v, Q) else "%s %s" % (fmt(float(v)), u)
+    vec = "; ".join(term(c, "mm") for c in o)
+    rot = " * ".join("rotation%s(%s)" % (ax, term(a, "deg")) for ax, a in zip("zyx", angles) if not _is_zero(a))
     return "placement(vector(%s); %s)" % (vec, rot or "rotationz(0 deg)")
 
 
@@ -339,10 +341,14 @@ class Part:
         return f
 
     def hole_d(self, d=None, fit="clearance", horizontal=False):
-        """Printed hole diameter as a Q: `fit` from the profile `fits` (d + allowance) or a screw fit
-        like "clearance_m3" / "tap_m3" (d ignored). horizontal adds the profile's extra allowance."""
+        """Printed hole diameter as a Q: `fit` from the profile `fits` (d + allowance), a screw fit
+        like "clearance_m3" / "tap_m3" (profile `screws`, d ignored) or a heat-set insert fit like
+        "insert_m3" (card fastener/m3_insert, d ignored). horizontal adds the profile's extra allowance."""
         kind, _, thread = fit.partition("_")
-        if thread:
+        if kind == "insert":
+            card, prefix = self._fastener(thread, "insert", fit)
+            q = self._card_q(card, prefix, card["interfaces"]["hole"]["d"])
+        elif thread:
             screws = {k.lower().replace(".", "_"): v for k, v in self.profile["screws"].items()}
             if thread not in screws or kind not in screws[thread]:
                 raise SDKError("sdk", "unknown screw fit %r; screws: %s, kinds: clearance, tap"
@@ -350,7 +356,7 @@ class Part:
             q = self._profile_q("%s_%s" % (kind, thread), screws[thread][kind])
         else:
             if fit not in self.profile["fits"]:
-                raise SDKError("sdk", "unknown fit %r; profile fits: %s or a screw fit like tap_m3"
+                raise SDKError("sdk", "unknown fit %r; profile fits: %s, a screw fit like tap_m3 or insert_m3"
                                % (fit, sorted(self.profile["fits"])))
             if d is None:
                 raise SDKError("sdk", "fit %r needs a nominal diameter d" % fit)
@@ -359,17 +365,42 @@ class Part:
             q = q + self._profile_q("horizontal_hole_extra", self.profile["horizontal_hole_extra_mm"])
         return q
 
-    def hole(self, on, at, d=None, fit="clearance", depth=None, horizontal=False, name=None):
+    def _fastener(self, thread, kind, fit):
+        """Card fastener/<thread>_<kind> (e.g. m3_insert) and its alias prefix."""
+        card_id = "fastener/%s_%s" % (thread, kind)
+        if not card_path(card_id).exists():
+            raise SDKError("sdk", "%r needs card %s, which is not in the library" % (fit, card_id),
+                           action="use a screw size with a %s card (e.g. m3)" % kind)
+        return load_card(card_id), "%s_%s" % (thread, kind)
+
+    def hole(self, on, at, d=None, fit="clearance", depth=None, horizontal=False, counterbore=False, name=None):
         """Round hole(s) at `at` = (u, v) or a list of points in the sketch frame of `on`; diameter from
-        the print profile (see hole_d). Through all along the normal unless `depth` is given."""
+        the print profile (see hole_d). Through all along the normal unless `depth` is given; an insert
+        fit defaults to the card's hole depth. counterbore=True (screw clearance fits only) also sinks
+        the screw head: head_d + clearance, head_h deep, cut against the normal of `on`."""
         name = self._new_name(name, "hole")
         dq = self.hole_d(d, fit, horizontal)
+        kind, _, thread = fit.partition("_")
+        if kind == "insert" and depth is None:
+            card, prefix = self._fastener(thread, "insert", fit)
+            depth = self._card_q(card, prefix, card["interfaces"]["hole"]["depth"])
         pts = [at] if is_num(at[0]) or isinstance(at[0], Q) else list(at)
         s = self.sketch(name + "_sketch", on=on)
         s.circles(dq, pts, name=name)
-        if depth is None:
-            return self.pocket(s, through=True, symmetric=True, name=name + "_cut")
-        return self.pocket(s, depth=depth, name=name + "_cut")
+        cut = (self.pocket(s, through=True, symmetric=True, name=name + "_cut") if depth is None
+               else self.pocket(s, depth=depth, name=name + "_cut"))
+        if not counterbore:
+            return cut
+        if kind != "clearance" or not thread:
+            raise SDKError("sdk", "hole %s: counterbore needs a screw clearance fit such as clearance_m3" % name,
+                           location=name)
+        card, prefix = self._fastener(thread, "screw", fit)
+        cb = card["interfaces"]["counterbore"]
+        clr = self._profile_q("fit_clearance", self.profile["fits"]["clearance"])
+        s2 = self.sketch(name + "_counterbore_sketch", on=on)
+        s2.circles(self._card_q(card, prefix, cb["d"]) + clr, pts, name=name + "_head")
+        return [cut, self.pocket(s2, depth=self._card_q(card, prefix, cb["depth"]) + clr / 2,
+                                 name=name + "_counterbore")]
 
     # ---- connectors ------------------------------------------------------------------------
     def connector(self, name, origin, z=None, x=None, label=None, rot=None):
@@ -401,46 +432,58 @@ class Part:
             raise SDKError("sdk", "no card %r" % card_id)
         return load_card(card_id), prefix
 
+    def _card_alias(self, card, prefix, pname):
+        alias = "%s_%s" % (prefix, pname)
+        if alias not in self.params_info:
+            self._add_param(alias, card["params_mm"][pname], source="card:" + card["id"])
+        return Q(self.params_info[alias]["value"], "Params." + alias)
+
     def _card_q(self, card, prefix, v):
-        """Card value (param name, '-name' or number) as a Q bound to a `<prefix>_<param>` alias."""
+        """Card value (param name, param expression or number) as a Q over `<prefix>_<param>` aliases."""
         if isinstance(v, str):
-            neg, pname = v.startswith("-"), v.lstrip("-")
-            if pname not in card["params_mm"]:
-                raise SDKError("sdk", "card %s: unknown param %r" % (card["id"], v))
-            alias = "%s_%s" % (prefix, pname)
-            if alias not in self.params_info:
-                self._add_param(alias, card["params_mm"][pname], source="card:" + card["id"])
-            q = Q(self.params_info[alias]["value"], "Params." + alias)
-            return -q if neg else q
+            if not is_expr(card, v):
+                raise SDKError("sdk", "card %s: %r is not a param or an expression over params_mm" % (card["id"], v))
+            return evaluate(card, v, lambda pname: self._card_alias(card, prefix, pname))
         return 0 if v == 0 else self._q(v, "%s_lit" % prefix, source="card:" + card["id"])
 
-    def _offset_datum(self, name, base, z_local):
-        """Datum plane = frame of datum `base` moved by z_local (Q) along its own z (local AttachmentOffset)."""
-        pl = self.body.newObject("PartDesign::Plane", self._new_name(name, "datum"))
+    def _local_datum(self, name, base, origin=(0, 0, 0), angles=(0, 0, 0)):
+        """Datum plane attached to datum `base`, offset by a frame in base's own axes (probed 2026-10-09:
+        the attachment composes as base.Placement * offset). origin/angles: 0, numbers or Qs."""
+        name = self._new_name(name, "datum")
+        pl = self.body.newObject("PartDesign::Plane", name)
         pl.AttachmentSupport = [(base.obj, "")]
         pl.MapMode = "FlatFace"
-        if not _is_zero(z_local):
-            pl.AttachmentOffset = App.Placement(App.Vector(0, 0, float(z_local)), App.Rotation())
-            pl.setExpression(".AttachmentOffset.Base.z", z_local.expr)
+        if not all(_is_zero(v) for v in (*origin, *angles)):
+            pl.AttachmentOffset = _frame_placement(origin, angles)
+            pl.setExpression(".AttachmentOffset", _frame_expr(origin, angles))
         d = Datum(name, pl)
         self.datums[name] = d
         return d
 
-    def mount(self, component, at, name=None):
-        """Seat a component (plan component id, or a card id) with its card frame on connector `at`:
-        cuts the card's mount_pocket (+ clearance), mount_holes (tap fit) and keep_out boxes.
-        Card dims become `<component>_<param>` aliases; nothing is a literal in the part program."""
+    def _connector_frame(self, at, call, name):
+        """Datum at connector `at` (the frame a card is seated on)."""
         if at not in self.connectors:
-            raise SDKError("sdk", "mount: no connector %r in part %s; declare it with part.connector() first"
-                           % (at, self.name))
+            raise SDKError("sdk", "%s: no connector %r in part %s; declare it with part.connector() first"
+                           % (call, at, self.name))
+        fname = self._new_name(name + "_frame", "datum")
+        d = Datum(fname, self._frame_datum(fname, self.connectors[at]["frame"]))
+        self.datums[fname] = d
+        return d
+
+    def mount(self, component, at, name=None, host_t=None):
+        """Seat a component (plan component id, or a card id) with its card frame on connector `at`:
+        body pocket (+ clearance), tapped mounting holes, standoffs and keep-out cuts, all from the card.
+        Card dims become `<component>_<param>` aliases; nothing is a literal in the part program.
+        host_t: material thickness under the frame; needed by slotted standoffs (nut traps from below)."""
         card, prefix = self._card(component)
         name = self._new_name(name or "mount_" + prefix, "mount")
-        conn = self.connectors[at]
+        frame = self._connector_frame(at, "mount", name)
+        return self._seat(card, prefix, frame, name, host_t)
+
+    def _seat(self, card, prefix, frame, name, host_t=None):
         itf = card.get("interfaces", {})
         clr = self._profile_q("fit_clearance", self.profile["fits"]["clearance"])
         cq = lambda v: self._card_q(card, prefix, v)
-        frame = Datum(name + "_frame", self._frame_datum(self._new_name(name + "_frame", "datum"), conn["frame"]))
-        self.datums[frame.name] = frame
         made = []
 
         pk = itf.get("mount_pocket")
@@ -456,29 +499,197 @@ class Part:
         if mh:
             if mh.get("pattern") != "rect" or mh.get("z", 0) != 0:
                 raise SDKError("sdk", "mount_holes: SDK v0 supports pattern rect at z 0", location=card["id"])
-            px, py = (cq(v) / 2 for v in mh["pitch"])
             screw = mh["screw"].lower().replace(".", "_")
-            nominal = float(mh["screw"].upper().lstrip("M"))
-            sdepth = self._q(2.5 * nominal, "%s_screw_depth" % prefix, source="sdk: 2.5 x nominal")
             s = self.sketch(name + "_holes_sketch", on=frame)
-            s.circles(self.hole_d(fit="tap_" + screw), [(px, py), (-px, py), (-px, -py), (px, -py)], name="screw")
-            made.append(self.pocket(s, depth=sdepth, name=name + "_holes"))
+            s.circles(self.hole_d(fit="tap_" + screw), _rect_pts(*(cq(v) / 2 for v in mh["pitch"])), name="screw")
+            made.append(self.pocket(s, depth=self._screw_depth(mh["screw"], prefix), name=name + "_holes"))
+
+        so = itf.get("standoffs")
+        if so:
+            made += self._standoffs(card, prefix, frame, name, so, host_t)
 
         for k, ko in enumerate(itf.get("keep_out", [])):
             if "box_min" in ko:
                 lo, hi = [cq(v) for v in ko["box_min"]], [cq(v) for v in ko["box_max"]]
-                size = [b - a for a, b in zip(lo, hi)]
+                size = [_minus(b, a) for a, b in zip(lo, hi)]
                 centre = [_half_sum(a, b) for a, b in zip(lo[:2], hi[:2])]
                 top = hi[2]
             else:
                 size = [cq(v) for v in ko["size"]]
                 centre = [cq(v) for v in ko.get("centre_xy", (0, 0))]
                 top = _plus(cq(ko.get("bottom_z", 0)), size[2])
-            d = self._offset_datum("%s_keep_out%d_frame" % (name, k), frame, top)
+            d = self._local_datum("%s_keep_out%d_frame" % (name, k), frame, (0, 0, top))
             s = self.sketch("%s_keep_out%d_sketch" % (name, k), on=d)
             s.rect(size[0], size[1], center=tuple(centre), name="box")
             made.append(self.pocket(s, depth=size[2], name="%s_keep_out%d" % (name, k)))
         return made
+
+    def _screw_depth(self, screw, prefix):
+        nominal = float(screw.upper().lstrip("M"))
+        return self._q(2.5 * nominal, "%s_screw_depth" % prefix, source="sdk: 2.5 x nominal")
+
+    def _standoffs(self, card, prefix, frame, name, so, host_t):
+        """Bosses from z = 0 to h. rect: tapped holes h deep. rect_slotted: obround bosses along x, a
+        clearance slot through boss and host (host_t), and a nut-trap slot from the host underside."""
+        cq = lambda v: self._card_q(card, prefix, v)
+        h, d = cq(so["h"]), cq(so["d"])
+        px, py = (cq(v) / 2 for v in so["pitch"])
+        screw = so["screw"].lower().replace(".", "_")
+        if so["pattern"] not in ("rect", "rect_slotted"):
+            raise SDKError("sdk", "standoffs: SDK v0 supports patterns rect and rect_slotted, got %r"
+                           % so["pattern"], location=card["id"])
+        if so["pattern"] == "rect_slotted" and host_t is None:
+            raise SDKError("sdk", "%s: slotted standoffs need the host thickness for their nut traps" % name,
+                           location=card["id"], action="use part.electronics_bay(), or pass host_t= to mount()")
+        top = self._local_datum(name + "_standoff_top", frame, (0, 0, h))
+        boss = self.sketch(name + "_standoff_sketch", on=frame)
+        made = []
+        if so["pattern"] == "rect":
+            boss.circles(d, _rect_pts(px, py), name="standoff")
+            made.append(self.pad(boss, h, name=name + "_standoffs"))
+            s = self.sketch(name + "_standoff_holes_sketch", on=top)
+            s.circles(self.hole_d(fit="tap_" + screw), _rect_pts(px, py), name="screw")
+            made.append(self.pocket(s, depth=h, name=name + "_standoff_holes"))
+            return made
+        host_t = self._q(host_t, name + "_host_t")
+        half = cq(so["slot_len"]) / 2
+        ends = [((cx - half, cy), (cx + half, cy)) for cx, cy in _rect_pts(px, py)]
+        for k, (a, b) in enumerate(ends):
+            boss.slot(a, b, d, name="standoff%d" % k)
+        made.append(self.pad(boss, h, name=name + "_standoffs"))
+        s = self.sketch(name + "_slots_sketch", on=top)
+        for k, (a, b) in enumerate(ends):
+            s.slot(a, b, cq(so["slot_w"]), name="slot%d" % k)
+        made.append(self.pocket(s, depth=h + host_t, name=name + "_slots"))
+        nut_card, nut_prefix = self._fastener(screw, "screw", so["screw"])
+        trap = nut_card["interfaces"]["nut_trap"]
+        clr = self._profile_q("fit_clearance", self.profile["fits"]["clearance"])
+        nut_w = self._card_q(nut_card, nut_prefix, trap["s"]) + clr
+        nut_depth = self._card_q(nut_card, nut_prefix, trap["m"]) + clr / 2
+        under = self._local_datum(name + "_nut_trap_top", frame, (0, 0, nut_depth - host_t))
+        s = self.sketch(name + "_nut_traps_sketch", on=under)
+        for k, (a, b) in enumerate(ends):
+            s.slot(a, b, nut_w, name="nut%d" % k)
+        made.append(self.pocket(s, depth=nut_depth, name=name + "_nut_traps"))
+        return made
+
+    def mate_to(self, target, at, access=True, name=None):
+        """Cut a component's drive interface where this part is driven by it: `target` =
+        "<component>.<card connector>" (e.g. "s_shoulder.horn"), seated on this part's connector `at`
+        (frames coincide; z points from the component into this part). For a disc horn: a recess for
+        the disc (+ clearance), tapped holes for the horn screws and, with access, a through hole for
+        the screwdriver on the axis. Give the joint the same axis (connector z) as `at`."""
+        comp, _, cname = target.partition(".")
+        if not cname:
+            raise SDKError("sdk", "mate_to: target must be '<component>.<connector>', got %r" % target)
+        card, prefix = self._card(comp)
+        horns = {k: v for k, v in card.get("interfaces", {}).items()
+                 if isinstance(v, dict) and v.get("kind") == "disc_horn"}
+        hz = next((v for v in horns.values() if v.get("at") == cname), None)
+        if hz is None:
+            at_list = sorted(v["at"] for v in horns.values())
+            raise SDKError("sdk", "mate_to: card %s has no drive interface at connector %r; disc horns at: %s"
+                           % (card["id"], cname, at_list),
+                           action=("target e.g. '%s.%s'" % (comp, at_list[0])) if at_list else None)
+        name = self._new_name(name or "mate_" + prefix, "mate")
+        frame = self._connector_frame(at, "mate_to", name)
+        clr = self._profile_q("fit_clearance", self.profile["fits"]["clearance"])
+        cq = lambda v: self._card_q(card, prefix, v)
+        disc_t = cq(hz["disc_t"])
+        ceiling = self._local_datum(name + "_recess_top", frame, (0, 0, disc_t + clr / 2))
+        s = self.sketch(name + "_recess_sketch", on=ceiling)
+        s.circle(cq(hz["disc_d"]) + clr, name="disc")
+        made = [self.pocket(s, depth=disc_t + clr, name=name + "_recess")]
+        r, n = cq(hz["bolt_circle_d"]) / 2, int(hz["bolts"])
+        pts = []
+        for k in range(n):
+            c, sn = math.cos(2 * math.pi * k / n), math.sin(2 * math.pi * k / n)
+            pts.append(tuple(0 if abs(v) < 1e-12 else r * v for v in (c, sn)))
+        screw = hz["screw"].lower().replace(".", "_")
+        s = self.sketch(name + "_screws_sketch", on=ceiling)
+        s.circles(self.hole_d(fit="tap_" + screw), pts, name="screw")
+        made.append(self.pocket(s, depth=self._screw_depth(hz["screw"], prefix + "_horn"), reverse=True,
+                                name=name + "_screws"))
+        if access:
+            s = self.sketch(name + "_access_sketch", on=ceiling)
+            s.circle(cq(hz["access_d"]), name="access")
+            made.append(self.pocket(s, through=True, reverse=True, name=name + "_access"))
+        return made
+
+    def electronics_bay(self, component, at, wall=None, margin=2, floor=None, name=None):
+        """Open-top bay for an electronics card (generic bay or a named board), seated on connector `at`
+        (the card frame: z up out of the floor). Builds a floor under z = 0 (default thick enough for the
+        card's cuts below it + min wall), walls around the card `volume` (+ margin) up to its top, then
+        the card's standoffs / pockets / keep-outs (as mount) and wall openings. Params: <name>_wall,
+        _margin, _floor_t; floor and walls follow the card dims."""
+        card, prefix = self._card(component)
+        if not str(card.get("kind", "")).startswith("electronics"):
+            raise SDKError("sdk", "electronics_bay: %s is a %s, not an electronics card" % (card["id"], card.get("kind")))
+        vol = card.get("interfaces", {}).get("volume")
+        if not vol:
+            raise SDKError("sdk", "electronics_bay: card %s has no `volume` interface" % card["id"])
+        name = self._new_name(name or "bay_" + prefix, "bay")
+        frame = self._connector_frame(at, "electronics_bay", name)
+        cq = lambda v: self._card_q(card, prefix, v)
+        if wall is None:
+            wall = self._q(2 * self.profile["min_wall_mm"], name + "_wall", source="sdk: 2 x min_wall")
+        else:
+            wall = self._q(wall, name + "_wall")
+        margin = self._q(margin, name + "_margin")
+        vl, vw, vh = (cq(v) for v in vol["size"])
+        cx, cy = (cq(v) for v in vol.get("centre_xy", (0, 0)))
+        height = _plus(cq(vol.get("bottom_z", 0)), vh)
+        in_l, in_w = vl + margin * 2, vw + margin * 2
+        out_l, out_w = in_l + wall * 2, in_w + wall * 2
+        if floor is None:
+            min_wall = self._profile_q("min_wall", self.profile["min_wall_mm"])
+            floor_t = self._add_param(self._unique_alias(name + "_floor_t"),
+                                      qmax(self._q(3, name + "_floor_min", source="sdk"),
+                                           *[b + min_wall for b in self._below(card, prefix)]),
+                                      source="sdk: card cuts below the frame + min_wall")
+        else:
+            floor_t = self._q(floor, name + "_floor_t")
+        made = []
+        s = self.sketch(name + "_floor_sketch", on=frame).rect(out_l, out_w, center=(cx, cy), name="floor")
+        made.append(self.pad(s, floor_t, reverse=True, name=name + "_floor"))
+        s = self.sketch(name + "_walls_sketch", on=frame)
+        s.rect(out_l, out_w, center=(cx, cy), name="outer").rect(in_l, in_w, center=(cx, cy), name="inner")
+        made.append(self.pad(s, height, name=name + "_walls"))
+        made += self._seat(card, prefix, frame, name, host_t=floor_t)
+        faces = {"+x": ((1, 0, 0), (0, 1, 0)), "-x": ((-1, 0, 0), (0, -1, 0)),
+                 "+y": ((0, 1, 0), (-1, 0, 0)), "-y": ((0, -1, 0), (1, 0, 0))}
+        clr = self._profile_q("fit_clearance", self.profile["fits"]["clearance"])
+        for k, op in enumerate(card["interfaces"].get("openings", [])):
+            if op["face"] not in faces:
+                continue  # "+z" (lid vents): not cut in v0
+            z, x = faces[op["face"]]
+            half = (in_l if z[0] else in_w) / 2 + wall
+            origin = (_plus(cx, half * z[0]) if z[0] else cx, _plus(cy, half * z[1]) if z[1] else cy, 0)
+            angles = [round(a, 9) for a in _rotation(z, x).toEulerAngles("YawPitchRoll")]
+            d = self._local_datum("%s_opening%d_frame" % (name, k), frame, origin, angles)
+            w, h = (cq(v) for v in op["size"])
+            s = self.sketch("%s_opening%d_sketch" % (name, k), on=d)
+            s.rect(w, h, center=(0, _plus(cq(op.get("bottom_z", 0)), h / 2)), name=op.get("kind", "opening"))
+            made.append(self.pocket(s, depth=wall + clr, name="%s_opening%d" % (name, k)))
+        return made
+
+    def _below(self, card, prefix):
+        """Depths (Q, > 0) that the card's cuts reach below its frame (z < 0)."""
+        itf = card.get("interfaces", {})
+        cq = lambda v: self._card_q(card, prefix, v)
+        clr = self._profile_q("fit_clearance", self.profile["fits"]["clearance"])
+        out = []
+        if itf.get("mount_pocket"):
+            out.append(cq(itf["mount_pocket"]["size"][2]) + clr / 2)
+        for ko in itf.get("keep_out", []):
+            bottom = cq(ko["box_min"][2]) if "box_min" in ko else cq(ko.get("bottom_z", 0))
+            if not _is_zero(bottom) and bottom.value < 0:
+                out.append(-bottom)
+        so = itf.get("standoffs")
+        if so and so["pattern"] == "rect_slotted":
+            nut_card, nut_prefix = self._fastener(so["screw"].lower().replace(".", "_"), "screw", so["screw"])
+            out.append(self._card_q(nut_card, nut_prefix, nut_card["interfaces"]["nut_trap"]["m"]) + clr / 2)
+        return out
 
     def cable_channel(self, start, end, d, name=None):
         """Straight round channel of diameter d from `start` to `end` (part frame). Start, end and d are
@@ -588,6 +799,11 @@ def _minus(b, a):
     if is_num(b) and b == 0:
         return -a
     return b - a
+
+
+def _rect_pts(px, py):
+    """Four corners (±px, ±py) of a centred rectangular pattern."""
+    return [(px, py), (-px, py), (-px, -py), (px, -py)]
 
 
 def _half_sum(a, b):

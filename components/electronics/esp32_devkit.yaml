@@ -1,0 +1,42 @@
+id: electronics/esp32_devkit
+kind: electronics.board
+verified: false            # nominal values for an ESP32-DevKitC-style 38-pin board; measure your board
+source: >-
+  ESP32-DevKitC V4-style board, about 54.4 x 27.9 mm, two 19-pin 2.54 mm header rows 25.4 mm apart,
+  USB connector on one short edge. These boards have no mounting holes; clones and the 30-pin
+  "DevKit V1" differ (about 51 x 28 mm). Values are nominal, not from a drawing.
+mass_kg: 0.010
+
+# Card frame = board_mount connector: origin on the host surface, centred on the board outline,
+# +z out of the surface, +x away from the USB edge (USB faces -x). The board lies in a recess
+# with its top flush with the surface; it rests on the floor between and around two pits that
+# take the header pins. Retention: friction fit, a zip tie or a lid (no holes on the board).
+params_mm:
+  pcb_l: 54.4
+  pcb_w: 27.9
+  pcb_t: 1.6
+  top_h: 5.0               # tallest top-side part (module shield, USB receptacle, buttons) + margin
+  pin_row_pitch: 25.4      # header rows, centre to centre (y)
+  pin_row_l: 48.3          # 19 pins x 2.54
+  pin_row_w: 3.0           # pit width per row (header plastic 2.54; rows sit at the board edge)
+  pin_below: 9.0           # header plastic + pin length below the PCB, + margin
+  usb_z: 1.5               # USB connector axis above the PCB top
+  usb_plug_w: 12.0         # cable plug overmould (micro-B / USB-C), + margin
+  usb_plug_h: 8.0
+  usb_plug_l: 20.0         # plug length outside the board edge
+
+connectors:
+  board_mount: { o: [0, 0, 0], z: [0, 0, 1], x: [1, 0, 0], label: board_mount }
+
+# Read by the SDK's mount() / electronics_bay(); all in the card frame (see generic_bay.yaml).
+interfaces:
+  volume:       { centre_xy: [0, 0], size: [pcb_l, pcb_w, top_h], bottom_z: 0, reason: board top-side parts }
+  mount_pocket: { centre_xy: [0, 0], size: [pcb_l, pcb_w, pcb_t], top_z: 0 }   # board recess, top flush
+  keep_out:
+    - { centre_xy: [0, "pin_row_pitch / 2"], size: [pin_row_l, pin_row_w, pin_below], bottom_z: "-(pcb_t + pin_below)", reason: header pins }
+    - { centre_xy: [0, "-pin_row_pitch / 2"], size: [pin_row_l, pin_row_w, pin_below], bottom_z: "-(pcb_t + pin_below)", reason: header pins }
+    - { box_min: ["-(pcb_l / 2 + usb_plug_l)", "-usb_plug_w / 2", "usb_z - usb_plug_h / 2"],
+        box_max: ["-pcb_l / 2 + 2", "usb_plug_w / 2", "usb_z + usb_plug_h / 2"], reason: USB cable plug }
+
+power_note: "3.3 V logic; PWM to a PCA9685 over I2C. Power from USB or 5 V on VIN, never from the servo rail."
+model: null                # placed as an envelope; geometry for the bay comes from interfaces

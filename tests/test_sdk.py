@@ -210,3 +210,91 @@ def test_errors_are_failure_signals(cases):
         assert sig["level"] == "failure" and sig["cause"], (k, sig)
     assert "unit symbol" in c["unit_alias"]["cause"]
     assert "s_missing" in c["unknown_component"]["cause"]
+    assert "not orthogonal" in c["not_orthogonal"]["cause"]
+    assert "host thickness" in c["slotted_no_host"]["cause"]
+    assert "disc horns at: ['horn']" in c["mate_no_horn"]["cause"]
+    assert "clearance fit" in c["counterbore_tap"]["cause"]
+    assert "not an electronics card" in c["bay_not_electronics"]["cause"]
+
+
+def test_mate_to_disc_horn(cases):
+    """Recess (disc + clearance), M2 tap holes into the part above it, screwdriver access through."""
+    c = get(cases, "mate_to")
+    assert_sound(c)
+    p = load_card("servo/mg996r")["params_mm"]
+    clr, tap = PROFILE["fits"]["clearance"], PROFILE["screws"]["M2"]["tap"]
+    a = lambda d: math.pi * (d / 2) ** 2
+
+    def removed(disc_t):
+        ceiling = disc_t + clr / 2  # part bottom at z = 0, recess from the bottom face up
+        return a(p["horn_disc_d"] + clr) * ceiling + 4 * a(tap) * 2.5 * 2 + a(p["horn_access_d"]) * (10 - ceiling)
+
+    assert vol(c) == pytest.approx(60 * 40 * 10 - removed(p["horn_disc_t"]))
+    assert vol(c, "m1") == pytest.approx(60 * 40 * 10 - removed(3))
+    assert c["report"]["params"]["s_shoulder_horn_disc_d"]["source"] == "card:servo/mg996r"
+
+
+def _slot(L, w):
+    return L * w + math.pi * (w / 2) ** 2
+
+
+def test_electronics_bay_generic(cases):
+    """Floor + walls around the usable volume, slotted standoffs with nut traps, two wall openings."""
+    c = get(cases, "bay_generic")
+    assert_sound(c)
+    b = load_card("electronics/generic_bay")["params_mm"]
+    clr, wall, min_wall = PROFILE["fits"]["clearance"], 2 * PROFILE["min_wall_mm"], PROFILE["min_wall_mm"]
+
+    def expected(margin, nut_m):
+        il, iw = b["usable_l"] + 2 * margin, b["usable_w"] + 2 * margin
+        ol, ow = il + 2 * wall, iw + 2 * wall
+        floor = max(3, nut_m + clr / 2 + min_wall)
+        h = b["standoff_h"]
+        v = ol * ow * floor + (ol * ow - il * iw) * (h + b["usable_h"]) + 4 * _slot(b["slot_len"], b["standoff_d"]) * h
+        v -= 4 * _slot(b["slot_len"], b["slot_w"]) * (h + floor)
+        v -= 4 * (_slot(b["slot_len"], 5.5 + clr) - _slot(b["slot_len"], b["slot_w"])) * (nut_m + clr / 2)
+        v -= (b["cable_exit_w"] * b["cable_exit_h"] + b["connector_cut_w"] * b["connector_cut_h"]) * wall
+        return v
+
+    assert vol(c) == pytest.approx(expected(2, 2.4))
+    assert vol(c, "m1") == pytest.approx(expected(3, 3.0))  # margin and M3 nut thickness edited
+    assert c["floor_t"]["before"] == pytest.approx(3.9) and c["floor_t"]["after"] == pytest.approx(4.5)
+
+
+def test_electronics_bay_pca9685(cases):
+    c = get(cases, "bay_pca9685")
+    assert_sound(c)
+    b = load_card("electronics/pca9685")["params_mm"]
+    tap, wall = PROFILE["screws"]["M2.5"]["tap"], 2 * PROFILE["min_wall_mm"]
+
+    def expected(h):
+        il, iw = b["pcb_l"] + 4, b["pcb_w"] + 4
+        ol, ow = il + 2 * wall, iw + 2 * wall
+        top = h + b["pcb_t"] + b["top_h"]
+        return ol * ow * 3 + (ol * ow - il * iw) * top + 4 * math.pi * ((b["standoff_d"] / 2) ** 2 - (tap / 2) ** 2) * h
+
+    assert vol(c) == pytest.approx(expected(b["standoff_h"]))
+    assert vol(c, "m1") == pytest.approx(expected(6))  # taller standoffs raise the walls too
+
+
+def test_electronics_bay_esp32(cases):
+    c = get(cases, "bay_esp32")
+    assert_sound(c)
+    b = load_card("electronics/esp32_devkit")["params_mm"]
+    pits = b["pcb_t"] + b["pin_below"]
+    assert c["floor_t"] == pytest.approx(pits + PROFILE["min_wall_mm"])  # floor sized by the pin pits
+    assert c["probes"] == [False, True, False, True, False]  # pit, floor, USB cut, wall, board recess
+    assert all(c["after_pin_below"]["gates"].values())
+    assert c["after_pin_below"]["zmin"] == pytest.approx(-(pits + 1 + PROFILE["min_wall_mm"]))
+
+
+def test_insert_and_counterbore(cases):
+    c = get(cases, "insert_counterbore")
+    assert_sound(c)
+    ins = load_card("fastener/m3_insert")["params_mm"]
+    scr = load_card("fastener/m3_screw")["params_mm"]
+    clr, m3 = PROFILE["fits"]["clearance"], PROFILE["screws"]["M3"]["clearance"]
+    a = lambda d: math.pi * (d / 2) ** 2
+    bolt = a(m3) * 10 + (a(scr["head_d"] + clr) - a(m3)) * (scr["head_h"] + clr / 2)
+    assert vol(c) == pytest.approx(40 * 40 * 10 - a(ins["hole_d"]) * ins["hole_depth"] - bolt)
+    assert vol(c, "m1") == pytest.approx(40 * 40 * 10 - a(4.2) * ins["hole_depth"] - bolt)

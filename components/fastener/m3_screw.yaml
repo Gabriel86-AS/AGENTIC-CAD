@@ -1,0 +1,25 @@
+id: fastener/m3_screw
+kind: fastener.screw
+verified: true             # ISO 4762 / ISO 4032 nominal dimensions
+source: ISO 4762 socket head cap screw M3 (dk 5.5, k 3.0); ISO 4032 hex nut M3 (s 5.5, m 2.4).
+mass_kg: 0.001             # M3 x 10 with nut, approx.
+
+# Hole diameters (clearance, tap) come from the print profile `screws` table; this card holds the
+# head and nut geometry that counterbores and nut traps need. Card frame: head underside, +z along
+# the shank away from the head.
+params_mm:
+  d: 3.0
+  head_d: 5.5
+  head_h: 3.0
+  nut_s: 5.5               # across flats
+  nut_m: 2.4               # thickness
+
+connectors:
+  head: { o: [0, 0, 0], z: [0, 0, 1], x: [1, 0, 0], label: screw_head }
+
+interfaces:
+  counterbore: { d: head_d, depth: head_h }   # hole(..., counterbore=True) adds the profile clearance fit
+  nut_trap:    { s: nut_s, m: nut_m }         # electronics_bay() slotted standoffs
+
+lengths_mm: [6, 8, 10, 12, 16, 20, 25, 30]   # common stock lengths
+model: null

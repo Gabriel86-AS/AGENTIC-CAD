@@ -1,0 +1,34 @@
+id: electronics/pca9685
+kind: electronics.board
+verified: false            # nominal values for an Adafruit-style 16-channel PWM driver; measure your board
+source: >-
+  16-channel 12-bit PWM / servo driver (PCA9685, Adafruit #815 layout): about 62.5 x 25.4 mm,
+  four M2.5 corner holes, 16 3-pin servo headers on top, power terminal block on one long edge.
+  Hole pitch is nominal (0.1 in inset from each edge), not from a drawing. Clones differ.
+mass_kg: 0.009
+
+# Card frame = board_mount connector: origin on the host surface, centred on the hole pattern,
+# +z out of the surface, +x along the long edge. The board sits on four standoffs (h above z = 0)
+# with M2.5 screws tapped into them; servo leads leave upward.
+params_mm:
+  pcb_l: 62.5
+  pcb_w: 25.4
+  pcb_t: 1.6
+  hole_pitch_x: 55.9
+  hole_pitch_y: 19.1
+  standoff_d: 5.0
+  standoff_h: 5.0          # clears through-hole pins under the board (~2.5)
+  top_h: 16.0              # 3-pin headers (8.5) + servo plugs + margin
+
+connectors:
+  board_mount: { o: [0, 0, 0], z: [0, 0, 1], x: [1, 0, 0], label: board_mount }
+
+# Read by the SDK's mount() / electronics_bay(); all in the card frame (see generic_bay.yaml).
+interfaces:
+  volume:     { centre_xy: [0, 0], size: [pcb_l, pcb_w, "pcb_t + top_h"], bottom_z: standoff_h, reason: board + servo plugs }
+  standoffs:  { pattern: rect, pitch: [hole_pitch_x, hole_pitch_y], d: standoff_d, h: standoff_h, screw: M2.5 }
+
+power_note: >-
+  Logic VCC 3.3-5 V from the controller; servo power V+ through the terminal block from an external
+  5-6 V supply sized for the servos' combined stall current (~2.5 A per MG996R).
+model: null

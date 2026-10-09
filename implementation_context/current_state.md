@@ -4,10 +4,10 @@
 updated: 2026-10-09
 plan_version: v0.4 (IMPLEMENTATION_PLAN.md)
 current_phase: P1
-current_phase_status: in_progress; T1.1, T1.2, T1.3 done (P0 closed except O11 live API run)
-next_action: T1.4 cards (ESP32 DevKit, PCA9685, M3 screw/insert) + MG996R horn data -> SDK mate_to + electronics_bay; then T1.5 compile_part/probe_part
-code_written: harness/ (worker protocol + tests), spikes/run.py, spikes/s01-s10, spikes/drivers/s10.py, components/ (card.py, build.py, mg996r + generic_bay cards, servo_mg996r generator), tests/test_components.py, llm/ (tools, backend, agent_sdk_backend, claude_api_backend), spikes/s11_llm.py, spikes/urdf_1joint/, tests/test_llm_permissions.py, schemas/ (plan, signal, profile, names, export → schemas/json/), profiles/ (generic_fdm, materials), tests/test_schemas.py, sdk/ (expr, sketch, part, errors), tests/test_sdk.py + tests/freecad/sdk_cases.py, docs/sdk.md (55 tests total)
-git: branch p0-env-spikes, commits 2ce73d4, 7ee20dd (P0 closure), 82da443 (T1.1-T1.3), not pushed; D28 revision (param-bound frame orientation) uncommitted
+current_phase_status: in_progress; T1.1-T1.4 done (P0 closed except O11 live API run)
+next_action: T1.5 harness tools compile_part / probe_part + signal formatter (worker op on top of sdk.report()); measure unverified card values when hardware is at hand (O12)
+code_written: harness/ (worker protocol + tests), spikes/run.py, spikes/s01-s10, spikes/drivers/s10.py, components/ (card.py with card expressions, build.py, cards: servo/mg996r (+ horn), electronics/generic_bay, esp32_devkit, pca9685, fastener/m3_screw, m3_insert; servo_mg996r generator), tests/test_components.py, llm/ (tools, backend, agent_sdk_backend, claude_api_backend), spikes/s11_llm.py, spikes/urdf_1joint/, tests/test_llm_permissions.py, schemas/ (plan, signal, profile, names, export → schemas/json/), profiles/ (generic_fdm, materials), tests/test_schemas.py, sdk/ (expr, sketch, part, errors), tests/test_sdk.py + tests/freecad/sdk_cases.py, docs/sdk.md (68 tests total)
+git: branch p0-env-spikes, commits 2ce73d4, 7ee20dd (P0 closure), 82da443 (T1.1-T1.3), 1800634 (D28 revised), T1.4 commit; not pushed
 ```
 
 ## 1. How to use this directory (token-saving protocol)
@@ -58,8 +58,8 @@ flowchart LR
 | T1.1 | `schemas/` + JSON schema export | done: `Spec`, `AssemblyPlan` (+ `Param` ranges, `Connector`, `Joint`, `Mimic`, `Derived`), `Signal`, `TraceEvent`, `PrintProfile`; `python -m schemas.export`; test fails if JSON is stale |
 | T1.2 | SDK core v0 + unit tests per call | done: `sdk/` (Part, params, datum, sketch rect/circle(s)/slot/polygon, pad, pocket, hole(fit), connector, mount, cable_channel, report, save); 16 cases in one worker run (~2 s); frame orientation param-bound (D28 revised); `mate_to` + `electronics_bay` moved to T1.4 |
 | T1.3 | `profiles/generic_fdm.yaml`, `materials.yaml` | done: `profiles/__init__.py` (`load_profile`, `hole_diameter`) |
-| T1.4 | Cards: ESP32 DevKit, PCA9685, M3 screw/insert (MG996R, generic bay exist) + MG996R horn interface; SDK `mate_to`, `electronics_bay` | todo (next) |
-| T1.5 | Harness tools `compile_part`, `probe_part`, signal formatter | todo |
+| T1.4 | Cards: ESP32 DevKit, PCA9685, M3 screw/insert (MG996R, generic bay exist) + MG996R horn interface; SDK `mate_to`, `electronics_bay` | done: 4 new cards + MG996R `horn` connector/interface; SDK `mate_to` (disc horn), `electronics_bay` (floor/walls/openings + standoffs), `mount` standoffs, `hole(fit="insert_m3", counterbore=)`; 22 SDK cases, all volumes exact |
+| T1.5 | Harness tools `compile_part`, `probe_part`, signal formatter | todo (next) |
 | T1.6 | Assembly builder | todo |
 | T1.7 | Validators L0–L3, L5, L6 (+plan), L7-basic | todo |
 | T1.8 | Exporter + D1, D2, D4 | todo |
@@ -101,6 +101,8 @@ P0 leftovers: O11 (live ClaudeAPIBackend run).
 | D26 | Names (params, parts, connectors, joints) = lower_snake_case, not a FreeCAD unit symbol (`schemas/names.py`, shared with the SDK). Schemas check structure only; cross-refs/tree/DOF are the plan validator's (signals, not exceptions) | T1.1 |
 | D27 | SDK: every length is a `Q` (value + FreeCAD expression); literals auto-promoted to Params aliases (`source: literal`), card dims to `<component>_<param>`, profile fits to `fit_*` / `tap_m3`, so every dimension is GUI-editable (no `fixed:` tag). Literals in sums carry the unit (`+ 3 mm`; unitless fails). Sheet columns name/value/min/max/source. `agenticcad` = alias of `sdk` | T1.2 |
 | D28 | Frames (connector LCS, datum frames, mount frames, channels) = one whole-Placement expression `placement(vector(x; y; z); rotationz(yaw) * rotationy(pitch) * rotationx(roll))` (LCS `.Placement`, datum `.AttachmentOffset` on body XY); origin **and** orientation bound to Params (`<name>_yaw/_pitch/_roll`, deg; `rot=` arg alternative to z/x). Channels: yaw/pitch = atan2/acos of end − start. Keep-outs attach to the mount frame datum with a local z offset. Per-component `.Rotation.Yaw` bindings rejected (gimbal-lock fights at pitch 90°). User confirmed D27/D28 2026-10-09: editability first | T1.2 |
+| D29 | Card values may be param expressions (`"spline_top + horn_top_above_tip - horn_disc_t"`, + - * / only, `components/card.py`); SDK and generators bind them as FreeCAD expressions. Card frame = the host surface the component rests on, +z out of it (servo flange underside, bay floor top, board recess top). Electronics cards share `volume` / `standoffs` / `openings` / `keep_out` interfaces | T1.4 |
+| D30 | `mate_to("<comp>.horn", at)`: card `horn` connector = horn disc underside (same axis as `output_shaft`); driven part's face at z = 0, recess + M2 taps + screwdriver access cut above it. `electronics_bay` floor_t default = `max(3 mm, deepest card cut below the frame + min_wall)` (live FreeCAD `max()`); slotted standoffs = slot + M3 nut trap from the floor underside | T1.4 |
 | D24 | Linux-side checks (check_urdf, `gz sdf -p`, pinocchio; later ROS 2 / Gazebo gates) run in Docker image `agenticcad-ros:jazzy` built from `docker/ros-tools/Dockerfile`; package dir mounted read-only. WSL Humble is a fallback (`AGENTICCAD_LINUX=wsl`) | T0.7 |
 
 ## 6. Open items / blockers
@@ -109,6 +111,7 @@ P0 leftovers: O11 (live ClaudeAPIBackend run).
 |---|---|---|
 | O11 | `ANTHROPIC_API_KEY` for the live ClaudeAPIBackend run (offline tests pass) | user |
 | O9 | Assembly WB `Gears`/`RackPinion` headless | P3 S12 |
+| O12 | Unverified cards (`verified: false`): MG996R (incl. horn disc), ESP32 DevKit, PCA9685 hole pitch, M3 insert hole. Measure samples; all values are Params, so fixes are card edits | user (hardware) |
 
 ## 7. File map
 
