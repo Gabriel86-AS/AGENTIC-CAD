@@ -3,7 +3,7 @@
 PartWorkspace is the restricted action space of one part agent (plan §3.4):
   read_file     own part file + read-only roots (SDK docs, cards, plan excerpt)
   write_file    ONLY parts/<own>.py; anything else raises ToolDenied
-  compile_part  gates L0-L3 on parts/<own>.py (harness/tools.py) and returns formatted feedback
+  compile_part  gates L0-L4 on parts/<own>.py (harness/tools.py) and returns formatted feedback
   probe_part    read-only measurement snippet against the last compiled model
 The path checks live here, not in the backends, so both backends enforce the same rule.
 """
@@ -44,7 +44,7 @@ class PartWorkspace:
     root: Path
     part: str
     read_roots: list[Path] = field(default_factory=list)
-    timeout_s: float = 60.0
+    timeout_s: float = 180.0   # compile_part includes L4 flex (up to 30 recomputes)
     plan: AssemblyPlan | None = None  # params, components and this part's PartSpec for the gates
     max_compiles: int | None = None   # K (plan §4.4): compile_part calls allowed in this session
     log: list[dict] = field(default_factory=list)  # every call, allowed or not (trace + tests)

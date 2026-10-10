@@ -10,6 +10,7 @@ from agents.context import checkpoint_text, part_excerpt
 from agents.job import Budgets, changed_parts, run
 from agents.router import route
 from agents.trace import Trace, tokens
+from harness import tools as harness_tools
 from harness.pipeline import JobReport
 from llm.backend import LLMBackend, RunResult, ToolCall
 from schemas.plan import AssemblyPlan, Spec
@@ -20,6 +21,12 @@ ROOT = Path(__file__).resolve().parents[1]
 GOLDEN = ROOT / "bench" / "golden" / "b1_3"
 PLAN = json.loads((GOLDEN / "plan.json").read_text(encoding="utf-8"))
 B13 = "A 2-DOF arm with a base yaw joint and a shoulder joint, 150 mm reach, carrying 50 g."
+
+
+@pytest.fixture(autouse=True)
+def no_flex(monkeypatch):
+    """L4 is tested in test_harness_tools / test_golden; here it would only re-flex the golden parts per compile."""
+    monkeypatch.setattr(harness_tools, "FLEX", False)
 
 
 def golden_plan(**over) -> AssemblyPlan:
@@ -42,6 +49,10 @@ def sig(gate, cause, location="", level="failure"):
     ("print", [sig("L7", "thin wall", "parts/turret.py")], "code", ["turret"]),
     ("print", [sig("L7", "fits the 180 mm build volume in no orientation", "parts/arm.py")], "design", []),
     ("export", [sig("export", "boom")], "stop", []),
+    ("part:arm", [sig("L4", "param beam_h at min = 16 mm ...", "parts/arm.py param beam_h -> beam")], "code", ["arm"]),
+    ("part:arm", [sig("L4", "param arm_len at min ...", "parts/arm.py param arm_len -> beam")], "code", ["arm"]),
+    ("part:turret", [sig("L4", "param arm_len at min ...", "parts/turret.py param arm_len -> lug"),
+                     sig("L4", "param arm_len at max ...", "parts/arm.py param arm_len -> beam")], "design", []),
 ])
 def test_router_table(stage, sigs, kind, parts):
     r = route(JobReport(ok=False, failed_stage=stage, signals=sigs), golden_plan())

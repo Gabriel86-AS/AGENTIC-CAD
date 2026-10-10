@@ -29,6 +29,11 @@ def build(P):
 - Plan params are already in the sheet: use `P.name` directly. `part.params(name=P.name)` just
   re-exports it; any other value under a plan param's name is rejected.
 - Sketches attach to origin planes or datums, never to faces.
+- Gate L4 (flex) moves params and rebuilds: plan params and `part.params(x={"value", "min", "max"})`
+  over their range, other named part params (`part.params(wall=3)`) over ±20 %. Derive sizes and
+  positions from params, never from numbers that only fit the nominal (a datum on top of a pad uses
+  the pad's param: `offset=p.thick`, not `offset=5`). A param that must not move:
+  `part.params(x={"value": 5, "min": 5, "max": 5})`. Literals passed straight to calls do not flex.
 
 ## Frames
 Part frame = Body origin. Sketch coordinates on origin planes:
@@ -103,8 +108,10 @@ dimension bound), `L3_one_solid`, plus sketches, connectors, params, volume, bou
 
 ## Tools: compile_part and probe_part
 `compile_part()` runs L0, builds the part in FreeCAD (L1), checks every sketch (L2) and the solid
-(L3), then checks the plan: each plan connector exists within 0.01 mm of its declared pose with its
-label, and the bounding box is within ±20 % of the plan's `bbox_mm`. It answers with one status
+(L3), flexes the params (L4: min, max and one interior value each, up to 30 rebuilds; connector-driving
+params first; a failure names the param, the value and the first broken feature), then checks the
+plan: each plan connector exists within 0.01 mm of its declared pose with its label, and the bounding
+box is within ±20 % of the plan's `bbox_mm`. The saved model is always the nominal one. It answers with one status
 line and up to 8 signals, failures first:
 
 ```

@@ -18,7 +18,7 @@ PROFILE = load_profile()
 @pytest.fixture(scope="module")
 def cases(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("sdk")
-    res = run_request({"op": "run_script", "script": str(CASES), "out": str(tmp / "out")}, tmp / "io", timeout_s=120)
+    res = run_request({"op": "run_script", "script": str(CASES), "out": str(tmp / "out")}, tmp / "io", timeout_s=600)
     assert res.ok, res.signals
     return res.result
 
@@ -503,3 +503,16 @@ def test_pack_composite_errors(cases):
     assert "not a bearing" in c["seat_not_bearing"]["cause"]
     assert "rollers must be an int >= 3" in c["turntable_rollers"]["cause"]
     assert "no room for the trough" in c["hollow_no_room"]["cause"]
+
+
+V1_SAMPLES = ["polyline", "rounded_rect", "fillet_chamfer", "hole_edges", "shell", "mirror", "pattern_linear",
+              "pattern_polar", "boss", "rib", "bearing_seat", "horn_coupler", "link_bar", "hollow_link", "turntable",
+              "u_bracket"]
+
+
+@pytest.mark.parametrize("name", V1_SAMPLES)
+def test_v1_sample_passes_flex(cases, name):
+    """P2 §3.6: every SDK v1 call flexes on a sample (its own literal dimensions +-20 %, capped at 12 runs)."""
+    f = get(cases, name)["flex"]
+    assert f["runs"] > 0 and f["restored"], f
+    assert f["failures"] == [], f["failures"]

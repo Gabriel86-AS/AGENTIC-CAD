@@ -4,8 +4,9 @@ compile_part request:
     program     path of parts/<name>.py          part        expected Part name (optional)
     params      plan params {name: {value, min, max, unit}}
     components  {component_id: card_id}           profile     print profile name (optional)
-    out         .FCStd path to save
-  -> result = sdk Part.report() (gates L1/L2/L3-local, sketches, connectors, params, volume, bbox),
+    out         .FCStd path to save                flex / seed  L4 on (default) / its random seed
+  -> result = sdk Part.report() (gates L1/L2/L3-local, sketches, connectors, params, volume, bbox) and,
+     when L1-L3 pass, `flex` (L4, validate/flex.py, run after the nominal model is saved),
      artifacts.fcstd; signals carry `parts/<name>.py:<line>` locations.
 
 probe_part request:
@@ -24,6 +25,7 @@ import Part as OCC
 import sdk
 from sdk import Part, PlanParams, SDKError
 from sdk.errors import signal
+from validate.flex import IMPLIED, flex
 
 
 def _program_line(exc, display):
@@ -71,6 +73,13 @@ def compile_part(req, res):
     res["metrics"] = {"volume_mm3": rep["volume_mm3"], "n_solids": rep["n_solids"],
                       "n_sketches": len(rep["sketches"]), "max_dof": max([s["dof"] for s in rep["sketches"].values()] or [0]),
                       "n_params": len(rep["params"])}
+    if req.get("flex", True) and not any(s["level"] == "failure" for s in res["signals"]):
+        facts, sigs = flex(part, req.get("seed") or part.name, display,
+                           implied=req.get("flex_implied", IMPLIED))   # after save: the .FCStd stays nominal
+        rep["flex"] = facts
+        rep["gates"]["L4_flex"] = not facts["failures"]
+        res["signals"].extend(sigs)
+        res["metrics"].update(flex_runs=facts["runs"], flex_s=facts["elapsed_s"])
     res["result"] = rep
     res["ok"] = not any(s["level"] == "failure" for s in res["signals"])
     part.close()

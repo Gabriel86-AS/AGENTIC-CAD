@@ -1,6 +1,6 @@
 """Part-agent harness tools (P1 T1.5, plan §3.4): compile_part and probe_part, orchestrator side.
 
-    compile_part  L0 lint -> worker (SDK build, gates L1, L2, local L3, save .FCStd) -> plan-side L3
+    compile_part  L0 lint -> worker (SDK build, gates L1, L2, local L3, save .FCStd, L4 flex) -> plan-side L3
                   (connectors within 0.01 mm of their declared pose, labels, bbox within ±20 %)
     probe_part    L0 lint of the snippet -> worker, read-only measurement of the last compiled .FCStd
 
@@ -18,6 +18,7 @@ from harness.run import run_request
 from schemas.plan import AssemblyPlan, PartSpec
 from schemas.signal import Signal
 
+FLEX = True            # L4 in every compile; tests that are not about L4 switch it off (monkeypatch)
 POS_TOL_MM = 0.01
 DIR_TOL = 1e-4          # |Δ| of unit axis vectors (~0.006°)
 BBOX_TOL = 0.20
@@ -122,8 +123,8 @@ def _summary(report: dict) -> str:
 
 
 def compile_part(program: Path, io_dir: Path, out: Path | None = None, part: str | None = None,
-                 plan: AssemblyPlan | None = None, timeout_s: float = 60.0) -> CompileResult:
-    """Gates L0-L3 for one part program. `part` names the PartSpec in `plan` (default: file stem)."""
+                 plan: AssemblyPlan | None = None, timeout_s: float = 180.0) -> CompileResult:
+    """Gates L0-L4 for one part program. `part` names the PartSpec in `plan` (default: file stem)."""
     t0 = time.monotonic()
     program = Path(program).resolve()
     part = part or program.stem
@@ -135,7 +136,7 @@ def compile_part(program: Path, io_dir: Path, out: Path | None = None, part: str
     out = Path(out).resolve() if out else Path(io_dir).resolve() / "build" / f"{part}.FCStd"
     out.unlink(missing_ok=True)  # never probe a stale model after a failed compile
     req = {"op": "compile_part", "program": str(program), "display": display, "part": part, "out": str(out),
-           **_plan_request(plan)}
+           "flex": FLEX, **_plan_request(plan)}
     res = run_request(req, io_dir, timeout_s=timeout_s)
     sigs = [Signal.from_worker(s) for s in res.signals]
     report = res.result if isinstance(res.result, dict) else None

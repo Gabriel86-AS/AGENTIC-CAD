@@ -109,7 +109,7 @@ def part_system(name: str, excerpt: str, k: int) -> str:
 AgenticCAD SDK so that it meets the contract below, then make it compile.
 
 Tools: write_file (only parts/{name}.py; always the full file), read_file (your file, docs/, components/,
-bench/golden/, context/), compile_part (gates L0-L3 + your plan connectors; you have {k} compiles),
+bench/golden/, context/), compile_part (gates L0-L4 + your plan connectors; you have {k} compiles),
 probe_part (read-only measurements of the last compiled model).
 
 Work: write the program, call compile_part, read its signals (cause | location | fix), fix, repeat until

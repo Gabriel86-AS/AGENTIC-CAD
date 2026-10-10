@@ -123,6 +123,39 @@ def test_compile_part_pass(compiled):
     assert res.report["params"]["link_len"]["source"] == "plan" and res.fcstd.endswith("link.FCStd")
 
 
+def test_compile_part_flex_passes(compiled):
+    _, res = compiled
+    f = res.report["flex"]
+    assert res.report["gates"]["L4_flex"] and f["failures"] == [] and f["restored"]
+    # plan param over its range, named part params +-20 %; connector-driving first, declared before implied
+    assert f["tested"] == ["link_len", "thick", "width"] and f["runs"] == 9 and f["skipped"] == []
+
+
+FRAGILE = LINK.replace("    part.connector(", """    cut = part.sketch("cut", on="XY").rect(4, 18, center=(40, 0))
+    part.pocket(cut, through=True, reverse=True)
+    part.connector(""")
+
+
+def test_compile_part_flex_names_param_and_feature(tmp_path):
+    # a literal 18 mm slot across a 20 mm bar: at width -20 % it cuts the bar in two
+    res = compile_part(write(tmp_path, FRAGILE), tmp_path / "io", plan=make_plan())
+    assert not res.ok and res.fcstd   # the nominal model is still saved
+    l4 = [s for s in res.signals if s.gate == "L4" and s.level == "failure"]
+    assert len(l4) == 1, res.feedback
+    s = l4[0]
+    assert s.cause.startswith("param width at min = 16 mm (range 16..24, nominal 20)") and "2 solids" in s.cause
+    assert s.location == "parts/link.py param width -> Body"
+    assert "no declared range" in s.action and "width={" in s.action
+    assert res.report["flex"]["restored"]
+
+
+def test_compile_part_flex_pinned_and_capped(tmp_path):
+    pinned = FRAGILE.replace("width=20", 'width={"value": 20, "min": 20, "max": 20}')
+    res = compile_part(write(tmp_path, pinned), tmp_path / "io", plan=make_plan())
+    assert res.ok, res.feedback
+    assert "width" not in res.report["flex"]["tested"]
+
+
 def test_compile_part_plan_mismatch(tmp_path):
     res = compile_part(write(tmp_path, LINK), tmp_path / "io", plan=make_plan(tip=(80, 0, 0)))
     assert not res.ok

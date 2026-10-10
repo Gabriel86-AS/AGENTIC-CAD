@@ -1,8 +1,17 @@
 """T1.11 bench runner without an LLM: case discovery, spec matching, and one scripted case end to end."""
 import json
 
+import pytest
+
 from bench.runner import cases, run_bench, spec_match, summarize, summary
+from harness import tools as harness_tools
 from test_agents import scripted_backends
+
+
+@pytest.fixture(autouse=True)
+def no_flex(monkeypatch):
+    """L4 is tested in test_harness_tools / test_golden; here it would only re-flex the golden parts per compile."""
+    monkeypatch.setattr(harness_tools, "FLEX", False)
 
 
 def test_cases_cover_p1_bench():

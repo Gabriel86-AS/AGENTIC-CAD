@@ -3,7 +3,8 @@ the plan), from a fixed table. P2 wraps this table with an LLM classifier for am
 
     stage / gate                               route
     plan                                       DESIGN
-    part:<name> (L0-L3)                        CODE <name>
+    part:<name> (L0-L4)                        CODE <name>
+    L4 flex: one plan param fails in >= 2 parts DESIGN (its range conflicts across parts, P2 §3.1)
     assembly L5 overlap "a <-> b"              CODE for the plan parts among a, b (DESIGN if neither is a part)
     assembly L5 reach, tree; L6 torque         DESIGN
     print L7 build volume                      DESIGN (split or shorten the part)
@@ -18,6 +19,7 @@ from schemas.plan import AssemblyPlan
 from schemas.signal import Signal
 
 PART_LOC = re.compile(r"parts/([a-z0-9_]+)\.py")
+FLEX_LOC = re.compile(r"parts/([a-z0-9_]+)\.py param ([a-z0-9_]+)")
 
 
 @dataclass
@@ -40,10 +42,19 @@ def route(rep: JobReport, plan: AssemblyPlan) -> Route:
     parts = {p.name for p in plan.parts}
     if stage == "plan":
         return Route("design", signals=[_d(s) for s in fails], reason="plan validator")
+    flexed: dict = {}
+    for s in fails:
+        m = FLEX_LOC.match(s.location) if s.gate == "L4" else None
+        if m and m.group(2) in plan.params:
+            flexed.setdefault(m.group(2), set()).add(m.group(1))
+    conflict = sorted(p for p, ps in flexed.items() if len(ps) >= 2)
+    if conflict:
+        return Route("design", signals=[_d(s) for s in fails if s.gate == "L4"],
+                     reason="plan param range conflicts across parts (L4): %s" % ", ".join(conflict))
     if stage.startswith("part:"):
         name = stage.split(":", 1)[1]
         mine = [_d(s) for s in fails if f"parts/{name}.py" in s.location or s.location.startswith("connector")
-                or s.gate in ("L0", "L1", "L2", "L3", "sdk")]
+                or s.gate in ("L0", "L1", "L2", "L3", "L4", "sdk")]
         return Route("code", parts={name: mine or [_d(s) for s in fails]}, reason="part gates")
     if stage in ("assembly", "print"):
         code: dict = {}

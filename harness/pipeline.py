@@ -3,7 +3,7 @@ P1 gate and the export, in order. The golden solutions (T1.12) run it as is; the
 stages between their turns.
 
     plan    check_plan (schema, tree, DOF, reach, L6-plan)       DESIGN
-    parts   compile_part per plan part (L0-L3)                    CODE
+    parts   compile_part per plan part (L0-L4)                    CODE
     L5/L6   check_assembly (interference sweep, reach, torque)    CODE / DESIGN
     L7      check_print (build volume, watertight, min wall)      CODE / DESIGN
     build   build_assembly -> assembly.FCStd (rest pose)
