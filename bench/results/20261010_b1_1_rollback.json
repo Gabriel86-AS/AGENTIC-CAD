@@ -1,0 +1,84 @@
+{
+  "run": "20261010_b1_1_rollback",
+  "config": "agent_sdk",
+  "date": "2026-10-10 10:23:47",
+  "description_checks": true,
+  "summary": {
+    "cases": 1,
+    "passed": 1,
+    "cost_usd": 0.5339,
+    "wall_s": 123.3,
+    "tokens_in": 124698,
+    "tokens_out": 12204,
+    "spec_match": 1,
+    "dof0_rate_mean": 1.0,
+    "pack": {
+      "passed": 1,
+      "ran": 1,
+      "need": "4/5"
+    },
+    "core": {
+      "passed": 0,
+      "ran": 0,
+      "need": "2/2"
+    },
+    "p1_exit_bench": false
+  },
+  "cases": [
+    {
+      "id": "B1-1",
+      "group": "pack",
+      "pack": "manipulator",
+      "job_dir": "C:\\Users\\gabri\\OneDrive\\Desktop\\Code\\AgenticCAD\\jobs\\bench\\20261010_b1_1_rollback\\B1-1",
+      "status": "pass",
+      "reason": "all P1 gates and D1/D2/D4 pass",
+      "spec_match": {
+        "ok": true,
+        "diffs": []
+      },
+      "stages": {
+        "plan": true,
+        "part:base": true,
+        "part:turret": true,
+        "part:cam_bracket": true,
+        "assembly": true,
+        "print": true,
+        "build": true,
+        "export": true,
+        "description": true
+      },
+      "failed_stage": null,
+      "open_failure_gates": [],
+      "dof0_rate": 1.0,
+      "compiles": 3,
+      "compile_failures_by_gate": {},
+      "parts": {
+        "base": {
+          "sessions": 1,
+          "compiles": 1,
+          "escalations": 0,
+          "ok": true
+        },
+        "turret": {
+          "sessions": 1,
+          "compiles": 1,
+          "escalations": 0,
+          "ok": true
+        },
+        "cam_bracket": {
+          "sessions": 1,
+          "compiles": 1,
+          "escalations": 0,
+          "ok": true
+        }
+      },
+      "rounds": 1,
+      "rollbacks": 0,
+      "tokens_in": 124698,
+      "tokens_out": 12204,
+      "cost_usd": 0.533902,
+      "sessions": 5,
+      "wall_s": 123.3
+    }
+  ]
+}
