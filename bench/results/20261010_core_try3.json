@@ -1,0 +1,79 @@
+{
+  "run": "20261010_core_try3",
+  "config": "agent_sdk",
+  "date": "2026-10-10 09:58:16",
+  "description_checks": true,
+  "summary": {
+    "cases": 1,
+    "passed": 1,
+    "cost_usd": 0.5243,
+    "wall_s": 171.5,
+    "tokens_in": 154603,
+    "tokens_out": 20021,
+    "spec_match": 1,
+    "dof0_rate_mean": 1.0,
+    "pack": {
+      "passed": 0,
+      "ran": 0,
+      "need": "4/5"
+    },
+    "core": {
+      "passed": 1,
+      "ran": 1,
+      "need": "2/2"
+    },
+    "p1_exit_bench": false
+  },
+  "cases": [
+    {
+      "id": "B1-6",
+      "group": "core",
+      "pack": null,
+      "job_dir": "C:\\Users\\gabri\\OneDrive\\Desktop\\Code\\AgenticCAD\\jobs\\bench\\20261010_core_try3\\B1-6",
+      "status": "pass",
+      "reason": "all P1 gates and D1/D2/D4 pass",
+      "spec_match": {
+        "ok": true,
+        "diffs": []
+      },
+      "stages": {
+        "plan": true,
+        "part:box_body": true,
+        "part:lid": true,
+        "assembly": true,
+        "print": true,
+        "build": true,
+        "export": true,
+        "description": true
+      },
+      "failed_stage": null,
+      "open_failure_gates": [],
+      "dof0_rate": 1.0,
+      "compiles": 5,
+      "compile_failures_by_gate": {
+        "sdk": 3
+      },
+      "parts": {
+        "box_body": {
+          "sessions": 1,
+          "compiles": 2,
+          "escalations": 0,
+          "ok": true
+        },
+        "lid": {
+          "sessions": 1,
+          "compiles": 3,
+          "escalations": 0,
+          "ok": true
+        }
+      },
+      "rounds": 1,
+      "rollbacks": 0,
+      "tokens_in": 154603,
+      "tokens_out": 20021,
+      "cost_usd": 0.524338,
+      "sessions": 4,
+      "wall_s": 171.5
+    }
+  ]
+}
