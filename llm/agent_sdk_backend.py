@@ -11,6 +11,8 @@ Restriction layers (S11):
   6. the workspace policy itself   write_file accepts only parts/<own>.py (llm/tools.py)
 """
 import asyncio
+import os
+import tempfile
 
 from claude_agent_sdk import (
     AssistantMessage,
@@ -62,7 +64,7 @@ class AgentSDKBackend(LLMBackend):
         self.cwd = cwd
         self.max_budget_usd = max_budget_usd
 
-    def options(self, system: str, tools: list[ToolSpec], calls: list[ToolCall], denied: list[str]):
+    def options(self, system, tools: list[ToolSpec], calls: list[ToolCall], denied: list[str]):
         def wrap(spec: ToolSpec):
             @tool(spec.name, spec.description, spec.input_schema)
             async def handler(args):
@@ -97,18 +99,25 @@ class AgentSDKBackend(LLMBackend):
         res = RunResult(backend=self.name, model=self.model, final_text="", tool_calls=calls, denied_tools=denied)
         texts = []
         ours = {mcp_name(s) for s in tools}
-        async for msg in query(prompt=prompt, options=self.options(system, tools, calls, denied)):
-            if isinstance(msg, AssistantMessage):
-                for block in msg.content:
-                    if isinstance(block, TextBlock):
-                        texts.append(block.text)
-                    elif isinstance(block, ToolUseBlock) and block.name not in ours and block.name not in denied:
-                        denied.append(block.name)  # attempted a tool that is not ours (hook may also record it)
-            elif isinstance(msg, ResultMessage):
-                res.turns = msg.num_turns
-                res.usage = {"usage": msg.usage, "total_cost_usd": msg.total_cost_usd}
-                if msg.is_error:
-                    res.error = msg.subtype
+        # System prompt goes through a file: inline it hits the Windows 32k command-line limit (WinError 206)
+        fd, path = tempfile.mkstemp(prefix="agenticcad_sys_", suffix=".md")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(system)
+        try:
+            async for msg in query(prompt=prompt, options=self.options({"type": "file", "path": path}, tools, calls, denied)):
+                if isinstance(msg, AssistantMessage):
+                    for block in msg.content:
+                        if isinstance(block, TextBlock):
+                            texts.append(block.text)
+                        elif isinstance(block, ToolUseBlock) and block.name not in ours and block.name not in denied:
+                            denied.append(block.name)  # attempted a tool that is not ours (hook may also record it)
+                elif isinstance(msg, ResultMessage):
+                    res.turns = msg.num_turns
+                    res.usage = {"usage": msg.usage, "total_cost_usd": msg.total_cost_usd}
+                    if msg.is_error:
+                        res.error = msg.subtype
+        finally:
+            os.unlink(path)
         res.final_text = texts[-1] if texts else ""
         return res
 
