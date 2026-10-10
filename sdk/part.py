@@ -16,6 +16,7 @@ YZ -> (Y, Z), normal +X. Pad grows along the sketch normal, Pocket cuts against 
 import math
 
 import FreeCAD as App
+import Part as OCC
 
 from components.card import card_path, evaluate, is_expr, load_card
 from profiles import load_profile
@@ -129,6 +130,7 @@ class Part:
         self.datums = {}
         self.connectors = {}    # name -> {"o": (Q|0)x3, "z", "x", "label", "obj"}
         self.signals = []
+        self._dressed = {}      # dress-up feature name -> the feature whose edges/faces it uses
         self._names = {name, "Params", "Body"}
         self._n = {}
 
@@ -720,6 +722,264 @@ class Part:
         s = self.sketch(name + "_sketch", on=d_frame)
         s.circle(d, name="bore")
         return self.pocket(s, depth=length, name=name + "_cut")
+
+    # ---- features on features (SDK v1) -------------------------------------------------------
+    def _feature(self, f, call):
+        """A feature made by this part (the object pad/pocket/... returned, or its name)."""
+        obj = self.doc.getObject(f) if isinstance(f, str) else f
+        if obj is None or getattr(obj, "Document", None) is not self.doc or obj not in self.body.Group \
+                or not obj.isDerivedFrom("PartDesign::Feature"):
+            raise SDKError("sdk", "%s: %r is not a feature of part %s" % (call, f, self.name),
+                           action="pass the object pad()/pocket()/hole() returned, or its name")
+        return obj
+
+    def _features(self, fs, call):
+        flat, todo = [], list(fs) if isinstance(fs, (list, tuple)) else [fs]
+        while todo:
+            f = todo.pop(0)
+            if isinstance(f, (list, tuple)):
+                todo[:0] = list(f)
+            else:
+                flat.append(self._feature(f, call))
+        if not flat:
+            raise SDKError("sdk", "%s: no features given" % call)
+        return flat
+
+    def _extrusion(self, f, call):
+        """(origin, direction, tool shape) of a pad/pocket: direction = material growth (pad) or cut (pocket)."""
+        if not (f.isDerivedFrom("PartDesign::Pad") or f.isDerivedFrom("PartDesign::Pocket")):
+            raise SDKError("sdk", "%s: %s is a %s; edges and faces are picked from a pad or pocket"
+                           % (call, f.Name, f.TypeId.split("::")[-1]), location=f.Name,
+                           action="name the pad/pocket that made the edges")
+        sk = f.Profile[0]
+        n = sk.Placement.Rotation.multVec(App.Vector(0, 0, 1))
+        sign = (1 if f.isDerivedFrom("PartDesign::Pad") else -1) * (-1 if f.Reversed else 1)
+        return sk.Placement.Base, n * sign, f.AddSubShape
+
+    def _after(self, feature):
+        """Insertion point for a dress-up of `feature`: the feature, or the last dress-up already on it."""
+        at, group = feature, [o for o in self.body.Group if o.isDerivedFrom("PartDesign::Feature")]
+        for o in group[group.index(feature) + 1:]:
+            if self._dressed.get(o.Name) is feature and o.BaseFeature is at:
+                at = o
+            else:
+                break
+        return at
+
+    def _new_after(self, at, type_id, name):
+        """New feature right after `at` in the tree (later features rebase on it); Tip stays the last feature."""
+        tip = self.body.Tip
+        self.body.Tip = at
+        f = self.body.newObject(type_id, name)
+        self.body.Tip = f if tip is at else tip
+        return f
+
+    def _pick(self, feature, at, which, kind, call):
+        """Edge or face names of at.Shape that `feature` made, by class: start (sketch-plane cap: pad base,
+        pocket rim), end (far cap: pad top, pocket floor) or caps. Edges along the extrusion are not offered:
+        FreeCAD 1.1 renames them on every recompute (S13), so round those corners in the sketch (rect r=)."""
+        classes = {"start": {"start"}, "end": {"end"}, "caps": {"start", "end"}}
+        want = set()
+        for w in ([which] if isinstance(which, str) else list(which)):
+            if w not in classes:
+                side = kind == "Edge" and w in ("side", "all")
+                raise SDKError("sdk", "%s: unknown %s class %r; use start, end or caps%s"
+                               % (call, kind.lower(), w, "; edges along the extrusion are rounded in the sketch"
+                                  if side else ""),
+                               action="rect(w, h, r=...) in the profile sketch rounds the vertical edges" if side else None)
+            want |= classes[w]
+        self.doc.recompute()
+        o, d, tool = self._extrusion(feature, call)
+        tol = 1e-5
+        h = lambda p: (p - o).dot(d)
+        hs = [h(v.Point) for v in tool.Vertexes]
+        lo, hi = min(hs), max(hs)
+
+        def cls(pts):
+            vals = [h(p) for p in pts]
+            if max(vals) - min(vals) < tol:
+                return "start" if abs(vals[0] - lo) < tol else "end" if abs(vals[0] - hi) < tol else None
+            return None
+
+        def samples(e):
+            a, b = e.FirstParameter, e.LastParameter
+            return [e.valueAt(a + t * (b - a)) for t in (0.13, 0.5, 0.87)]
+
+        # items in the cap plane inside the tool's cap face: at the insertion point no later cut exists,
+        # so that is exactly this feature's outline (rounded by earlier dress-ups included)
+        ref = {"start": [], "end": []}
+        for fc in tool.Faces:
+            c = cls([v.Point for v in fc.Vertexes] + [fc.CenterOfMass])
+            if c:
+                ref[c].append(fc)
+        shape = at.Shape
+        items = shape.Edges if kind == "Edge" else shape.Faces
+        names = []
+        for c in want:
+            if not ref[c]:
+                continue
+            comp = OCC.Compound(ref[c])
+            for i, it in enumerate(items):
+                pts = samples(it) if kind == "Edge" else [it.CenterOfMass] + [v.Point for v in it.Vertexes]
+                if cls(pts) != c or any(comp.distToShape(OCC.Vertex(p))[0] > tol for p in pts):
+                    continue
+                names.append("%s%d" % (kind, i + 1))
+        if not names:
+            raise SDKError("sdk", "%s: feature %s left no %s %s in the solid" % (call, feature.Name, which, kind.lower() + "s"),
+                           location=feature.Name, action="pick another class (start, end) or another feature")
+        return sorted(set(names), key=lambda s: int(s[len(kind):]))
+
+    def _dressup(self, call, type_id, prop, feature, size, edges, name):
+        feature = self._feature(feature, call)
+        name = self._new_name(name or "%s_%s" % (feature.Name, call), call)
+        q = self._q(size, name + ("_r" if call == "fillet" else "_size"))
+        if q.value <= 0:
+            raise SDKError("sdk", "%s %s: size must be > 0, got %g" % (call, name, q.value), location=name)
+        at = self._after(feature)
+        subs = self._pick(feature, at, edges, "Edge", call)
+        f = self._new_after(at, type_id, name)
+        f.Base = (at, subs)
+        setattr(f, prop, q.value)
+        f.setExpression(prop, q.expr)
+        self._dressed[f.Name] = feature
+        return f
+
+    def fillet(self, feature, r, edges="end", name=None):
+        """Round the cap edges `feature` (a pad or pocket) made: edges = "end" (pad top / pocket floor),
+        "start" (pad base / pocket rim) or "caps". The fillet goes right after the feature in the tree, so
+        later cuts never rename its edges (S13). Edges along the extrusion: round them in the sketch
+        (rect(..., r=)). Param <name>_r."""
+        return self._dressup("fillet", "PartDesign::Fillet", "Radius", feature, r, edges, name)
+
+    def chamfer(self, feature, size, edges="end", name=None):
+        """Equal-distance chamfer on the edges `feature` made (classes as fillet). Param <name>_size."""
+        return self._dressup("chamfer", "PartDesign::Chamfer", "Size", feature, size, edges, name)
+
+    def shell(self, feature, wall, open="end", name=None):
+        """Hollow the solid inward to `wall`, removing the cap face(s) `feature` made ("end": pad top /
+        pocket floor, "start", "caps"). Goes right after the feature, like fillet. Param <name>_wall."""
+        feature = self._feature(feature, "shell")
+        name = self._new_name(name or feature.Name + "_shell", "shell")
+        q = self._q(wall, name + "_wall")
+        if q.value <= 0:
+            raise SDKError("sdk", "shell %s: wall must be > 0, got %g" % (name, q.value), location=name)
+        at = self._after(feature)
+        subs = self._pick(feature, at, open, "Face", "shell")
+        f = self._new_after(at, "PartDesign::Thickness", name)
+        f.Base = (at, subs)
+        f.Value = q.value
+        f.setExpression("Value", q.expr)
+        self._dressed[f.Name] = feature
+        return f
+
+    def _plane_ref(self, plane, call):
+        if isinstance(plane, Datum):
+            return plane.obj
+        if plane in PLANES:
+            return self._origin(plane + "_Plane")
+        raise SDKError("sdk", "%s: plane must be one of %s or a Datum, got %r" % (call, PLANES, plane))
+
+    def _axis_ref(self, axis, call, datum_ok=True):
+        """(support, reversed) for "x" | "y" | "z" | "-x" ... (origin axes) or a Datum (its normal)."""
+        if datum_ok and isinstance(axis, Datum):
+            return axis.obj, False
+        if isinstance(axis, str) and axis.lstrip("-") in ("x", "y", "z"):
+            return self._origin(axis.lstrip("-").upper() + "_Axis"), axis.startswith("-")
+        raise SDKError("sdk", "%s: axis must be x, y, z, -x, -y, -z%s, got %r"
+                       % (call, " or a Datum (its normal)" if datum_ok else "", axis))
+
+    def _transformed(self, type_id, features, name, call):
+        feats = self._features(features, call)
+        f = self.body.newObject(type_id, name)
+        f.Originals = feats
+        return f
+
+    def _count(self, count, hint):
+        if isinstance(count, Q):
+            self._ensure_plan(count)
+            if count.unit not in ("", "-"):
+                raise SDKError("sdk", "%s: count must be unitless, got %r" % (hint, count))
+            q = count
+        elif isinstance(count, int) and not isinstance(count, bool):
+            q = self._add_param(self._unique_alias(hint), count, unit="-", source="literal")
+        else:
+            raise SDKError("sdk", "%s: count must be an int or a unitless param, got %r" % (hint, count))
+        if q.value < 2 or q.value != int(q.value):
+            raise SDKError("sdk", "%s: count must be an int >= 2, got %g" % (hint, q.value))
+        return q
+
+    def mirror(self, features, plane="YZ", name=None):
+        """Mirror copies of features (one, or a list) about an origin plane or a Datum plane."""
+        name = self._new_name(name, "mirror")
+        ref = self._plane_ref(plane, "mirror")
+        f = self._transformed("PartDesign::Mirrored", features, name, "mirror")
+        f.MirrorPlane = (ref, [""])
+        self.body.Tip = f  # a Transformed made by newObject does not become the Tip (S14)
+        return f
+
+    def pattern_linear(self, features, direction, spacing, count, name=None):
+        """`count` copies (original included) `spacing` apart along direction "x" | "y" | "z" | "-x" ... or a
+        Datum's normal. Params <name>_spacing, <name>_count (unitless; editable)."""
+        name = self._new_name(name, "pattern")
+        ref, rev = self._axis_ref(direction, "pattern_linear")
+        sp = self._q(spacing, name + "_spacing")
+        if sp.value <= 0:
+            raise SDKError("sdk", "pattern_linear %s: spacing must be > 0, got %g" % (name, sp.value), location=name)
+        n = self._count(count, name + "_count")
+        f = self._transformed("PartDesign::LinearPattern", features, name, "pattern_linear")
+        f.Direction = (ref, [""])
+        f.Reversed = rev
+        f.Length, f.Occurrences = sp.value * (n.value - 1), int(n.value)
+        f.setExpression("Length", "%s * (%s - 1)" % (sp.expr, n.expr))
+        f.setExpression("Occurrences", n.expr)
+        self.body.Tip = f
+        return f
+
+    def pattern_polar(self, features, axis="z", count=2, angle=360, name=None):
+        """`count` copies (original included) about origin axis "x" | "y" | "z" (or "-z" ...): spread over
+        `angle` deg, both ends included, or evenly round the full circle when angle = 360.
+        Params <name>_count, <name>_angle (deg)."""
+        name = self._new_name(name, "pattern")
+        ref, rev = self._axis_ref(axis, "pattern_polar", datum_ok=False)
+        n = self._count(count, name + "_count")
+        a = self._q(angle, name + "_angle", unit="deg")
+        if a.unit != "deg" or not 0 < a.value <= 360:
+            raise SDKError("sdk", "pattern_polar %s: angle must be in (0, 360] deg, got %r" % (name, a), location=name)
+        f = self._transformed("PartDesign::PolarPattern", features, name, "pattern_polar")
+        f.Axis = (ref, [""])
+        f.Reversed = rev
+        f.Angle, f.Occurrences = a.value, int(n.value)
+        f.setExpression("Angle", a.expr)
+        f.setExpression("Occurrences", n.expr)
+        self.body.Tip = f
+        return f
+
+    def boss(self, on, at, d, height, hole=None, hole_d=None, hole_depth=None, name=None):
+        """Cylindrical boss(es) of diameter d rising `height` along the normal of `on` (origin plane or Datum)
+        at `at` = (u, v) or a list of points; with `hole` = a fit (e.g. "insert_m3", "tap_m3", "clearance_m3",
+        or "press" + hole_d) a hole from the boss top, `hole_depth` deep (insert: card depth; otherwise the
+        boss height). Params <name>_d, <name>_height."""
+        name = self._new_name(name, "boss")
+        pts = [at] if is_num(at[0]) or isinstance(at[0], Q) else list(at)
+        hq = self._q(height, name + "_height")
+        dq = self._q(d, name + "_d")
+        s = self.sketch(name + "_sketch", on=on).circles(dq, pts, name="boss")
+        made = [self.pad(s, hq, name=name + "_pad")]
+        if hole is None:
+            return made
+        top = (self._local_datum(name + "_top", on, (0, 0, hq)) if isinstance(on, Datum)
+               else self.datum(name + "_top", plane=on, offset=hq))
+        if hole_depth is None and not hole.startswith("insert"):
+            hole_depth = hq
+        made.append(self.hole(top, at=pts, d=hole_d, fit=hole, depth=hole_depth, name=name + "_hole"))
+        return made
+
+    def rib(self, on, points, thick, name=None):
+        """Flat rib / gusset: closed polygon `points` [(u, v), ...] in the sketch plane of `on`, padded
+        `thick` symmetric about it. Param <name>_thick."""
+        name = self._new_name(name, "rib")
+        s = self.sketch(name + "_sketch", on=on).polyline(points, name="profile")
+        return self.pad(s, self._q(thick, name + "_thick"), symmetric=True, name=name + "_pad")
 
     # ---- results ---------------------------------------------------------------------------
     def report(self) -> dict:

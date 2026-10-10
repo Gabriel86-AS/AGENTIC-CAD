@@ -1,4 +1,4 @@
-# AgenticCAD SDK v0 — reference for part programs
+# AgenticCAD SDK v1 — reference for part programs
 
 A part program is `parts/<name>.py`. It may import only `agenticcad` and `math`, and defines
 `build(P)` returning a `Part`. `P` holds the plan params (`P.upper_arm_len`).
@@ -51,10 +51,11 @@ Part frame = Body origin. Sketch coordinates on origin planes:
 | `part.datum(name, plane="XY", offset=0)` | datum plane offset along the plane normal |
 | `part.datum(name, origin=(x,y,z), z=(..), x=(..))` or `rot=(yaw, pitch, roll)` | datum frame; origin and orientation bound to params (`<name>_o_x`..., `<name>_yaw`/`_pitch`/`_roll` in deg; zero components stay literal) |
 | `part.sketch(name, on="XY"\|datum)` | sketch; returns a `Sketch` |
-| `sketch.rect(w, h, center=(0,0))` | axis-aligned rectangle |
+| `sketch.rect(w, h, center=(0,0), r=None)` | axis-aligned rectangle; `r` rounds its corners (= the edges a pad makes along its normal) |
 | `sketch.circle(d, center=(0,0))` / `sketch.circles(d, [pts])` | circle / equal circles |
 | `sketch.slot(start, end, width)` | obround between two arc centres |
 | `sketch.polygon(n, d, center=(0,0))` | regular n-gon in circle d, flat edge at the bottom |
+| `sketch.polyline([(u, v), ...])` | closed polygon (≥ 3 points, closes itself); each vertex is its own pair of params |
 | `part.pad(sketch, length, reverse=False, symmetric=False)` | extrusion |
 | `part.pocket(sketch, depth=… \| through=True, symmetric=False)` | cut |
 | `part.hole(on, at, d=None, fit="clearance", depth=None, horizontal=False, counterbore=False, name=None)` | hole(s); diameter from the print profile: `fit` = `clearance`/`press`/`close` (d + allowance), `clearance_m3`/`tap_m3`/... (d ignored) or `insert_m3` (heat-set insert hole from card `fastener/m3_insert`, card depth by default); `horizontal=True` adds the horizontal-hole allowance; through both ways unless `depth`. `counterbore=True` (screw clearance fits) sinks the head (card `fastener/m3_screw`) against the normal of `on`: put `on` at the entry face, normal pointing out |
@@ -64,8 +65,15 @@ Part frame = Body origin. Sketch coordinates on origin planes:
 | `part.electronics_bay(component, at=connector, wall=None, margin=2, floor=None)` | open-top bay for an electronics card (`electronics/generic_bay` or a board card such as `electronics/pca9685`, `electronics/esp32_devkit`), card frame on the connector (z up from the floor): floor below z = 0 (default: deep enough for the card's cuts + min wall, follows the card), walls around the card `volume` + margin up to its top, the card's standoffs / recess / keep-outs, and wall openings (cable exit, connector cut, USB plug). Params `<bay>_wall`, `_margin`, `_floor_t` |
 | `part.servo_u_bracket(servo, at=connector, length=None, width=30, thick=5, gap=2, idler="clearance_m3", idler_d=None, access=True)` | *manipulator pack.* Link driven by a servo and supported on both sides: `at` = the servo's `horn` face (as `mate_to`). Plate A on the horn (recess, M2 taps, access), plate B under the case bottom (+ `gap`) with an idler bore on the shaft axis (pin/screw fixed to the holder; not a joint), bridge at x = `length` (default: clears the flange over ±90° + 3 mm). Returns `length, width, thick, gap, bridge_x, plate_b_z, mid_z` in the frame of `at`; continue the link from x = `bridge_x`. Params `ubracket_<servo>_length`, `_width`, `_thick`, `_gap` |
 | `part.cable_channel(start, end, d)` | straight round channel between two part-frame points; editing either end moves and turns it |
+| `part.fillet(feature, r, edges="end")` / `part.chamfer(feature, size, edges="end")` | round / bevel the cap edges a pad or pocket made: `"end"` (pad top, pocket floor), `"start"` (pad base, pocket rim: countersink) or `"caps"`. `feature` = what `pad`/`pocket` returned, or its name. Inserted right after that feature, so later cuts never break it. Vertical (along-the-pad) edges: use `rect(..., r=)` in the sketch |
+| `part.shell(feature, wall, open="end")` | hollow the solid inward to `wall`, removing that feature's cap face(s) (`"end"`, `"start"`, `"caps"`) |
+| `part.mirror(features, plane="YZ")` | mirror copies of a feature or list, about `"XY"`/`"XZ"`/`"YZ"` or a datum |
+| `part.pattern_linear(features, direction, spacing, count)` | `count` copies (original included) along `"x"`/`"y"`/`"z"`/`"-x"`… or a datum's normal; `<name>_count` is an editable unitless param |
+| `part.pattern_polar(features, axis="z", count=2, angle=360)` | `count` copies about an origin axis; 360 = evenly round, else spread over `angle` with both ends included |
+| `part.boss(on, at, d, height, hole=None, hole_d=None, hole_depth=None)` | cylinder boss(es) at `at` (point or list) rising along the normal of `on`; `hole` = a fit (`"insert_m3"`, `"tap_m3"`, `"clearance_m3"`, `"press"` + `hole_d`) cut from the boss top, boss-height deep (insert: card depth) |
+| `part.rib(on, points, thick)` | gusset/rib: `polyline(points)` on `on`, padded `thick` symmetric about it |
 
-Not in v0 yet: pack composites such as `servo_u_bracket` (T1.10); spline (hornless) interfaces.
+Not in the SDK: spline (hornless) servo interfaces; sweeps/lofts; fillets on edges picked by index (they break on edits).
 
 ## Components
 Cards live in `components/<family>/<id>.yaml` (`read_file` them; never copy their numbers into a

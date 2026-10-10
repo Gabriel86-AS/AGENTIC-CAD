@@ -89,11 +89,14 @@ class Sketch:
         return App.Vector(float(x.value if isinstance(x, Q) else x), float(y.value if isinstance(y, Q) else y), 0)
 
     # ---- public calls ----------------------------------------------------------------------
-    def rect(self, w, h, center=(0, 0), name=None):
-        """Axis-aligned rectangle w (sketch x) by h (sketch y) centred at `center`. Dims: <name>_w, <name>_h."""
+    def rect(self, w, h, center=(0, 0), r=None, name=None):
+        """Axis-aligned rectangle w (sketch x) by h (sketch y) centred at `center`; r rounds its four corners
+        (= the edges a pad makes along its normal). Dims: <name>_w, <name>_h, <name>_r."""
         label = self._label("rect", name)
         w, h = self._len(w, label, "w"), self._len(h, label, "h")
         cx, cy = self._coord(center[0], label, "cx"), self._coord(center[1], label, "cy")
+        if r is not None:
+            return self._rounded_rect(w, h, cx, cy, self._len(r, label, "r"), label)
         sk = self.obj
         x0, y0 = _plus(cx, -(w / 2)), _plus(cy, -(h / 2))
         X0, Y0 = x0.value, y0.value
@@ -111,6 +114,48 @@ class Sketch:
             self._place(g0, 1, x0, y0, label + "_corner")
         self._bind(Sketcher.Constraint("DistanceX", g0, 1, g0, 2, w.value), label + "_w", w)
         self._bind(Sketcher.Constraint("DistanceY", g0 + 1, 1, g0 + 1, 2, h.value), label + "_h", h)
+        self._check("rect")
+        return self
+
+    def _rounded_rect(self, w, h, cx, cy, r, label):
+        if 2 * r.value >= min(w.value, h.value):
+            raise SDKError("sdk", "%s.%s: corner radius %g must be < half the smaller side (%g)"
+                           % (self.name, label, r.value, min(w.value, h.value) / 2), location=self.name)
+        sk = self.obj
+        x0, y0 = _plus(cx, -(w / 2)), _plus(cy, -(h / 2))
+        X0, Y0, X1, Y1, R = x0.value, y0.value, x0.value + w.value, y0.value + h.value, r.value
+        V, Z = App.Vector, App.Vector(0, 0, 1)
+        g = sk.GeometryCount
+        lines = [(V(X0 + R, Y0, 0), V(X1 - R, Y0, 0)), (V(X1, Y0 + R, 0), V(X1, Y1 - R, 0)),
+                 (V(X1 - R, Y1, 0), V(X0 + R, Y1, 0)), (V(X0, Y1 - R, 0), V(X0, Y0 + R, 0))]
+        for a, b in lines:
+            sk.addGeometry(OCC.LineSegment(a, b), False)
+        centres = [V(X0 + R, Y0 + R, 0), V(X1 - R, Y0 + R, 0), V(X1 - R, Y1 - R, 0), V(X0 + R, Y1 - R, 0)]
+        for k, c in enumerate(centres):  # arc k: from the end of line k-1 to the start of line k (ccw)
+            a0 = math.pi + k * math.pi / 2
+            sk.addGeometry(OCC.ArcOfCircle(OCC.Circle(c, Z, R), a0, a0 + math.pi / 2), False)
+        L, A = (lambda k: g + k % 4), (lambda k: g + 4 + k % 4)
+        cons = []
+        for k in range(4):
+            cons += [Sketcher.Constraint("Tangent", L(k - 1), 2, A(k), 1), Sketcher.Constraint("Tangent", A(k), 2, L(k), 1)]
+        cons += [Sketcher.Constraint("Horizontal", L(0)), Sketcher.Constraint("Horizontal", L(2)),
+                 Sketcher.Constraint("Vertical", L(1)), Sketcher.Constraint("Vertical", L(3))]
+        cons += [Sketcher.Constraint("Equal", A(0), A(k)) for k in (1, 2, 3)]
+        sk.addConstraint(cons)
+        if _is_zero(cx) and _is_zero(cy):
+            sk.addConstraint(Sketcher.Constraint("Symmetric", A(0), 3, A(2), 3, ROOT, 1))
+        else:
+            if _is_zero(x0):
+                sk.addConstraint(Sketcher.Constraint("PointOnObject", L(3), 1, V_AXIS))
+            else:
+                self._bind(Sketcher.Constraint("DistanceX", ROOT, 1, L(3), 1, X0), label + "_corner_x", x0)
+            if _is_zero(y0):
+                sk.addConstraint(Sketcher.Constraint("PointOnObject", L(0), 1, H_AXIS))
+            else:
+                self._bind(Sketcher.Constraint("DistanceY", ROOT, 1, L(0), 1, Y0), label + "_corner_y", y0)
+        self._bind(Sketcher.Constraint("DistanceX", L(3), 1, L(1), 1, w.value), label + "_w", w)
+        self._bind(Sketcher.Constraint("DistanceY", L(0), 1, L(2), 1, h.value), label + "_h", h)
+        self._bind(Sketcher.Constraint("Radius", A(0), R), label + "_r", r)
         self._check("rect")
         return self
 
@@ -163,6 +208,31 @@ class Sketch:
         self._place(a_e, 3, ex, ey, label + "_end")
         self._bind(Sketcher.Constraint("Diameter", a_s, width.value), label + "_width", width)
         self._check("slot")
+        return self
+
+    def polyline(self, points, name=None):
+        """Closed polygon through `points` [(u, v), ...] (>= 3), each vertex placed by its own pair of
+        dimensions (<name>_p<k>_x / _y; a literal 0 puts it on an axis). For ribs, gussets, wedges."""
+        label = self._label("poly", name)
+        if len(points) < 3:
+            raise SDKError("sdk", "%s.%s: polyline needs >= 3 points, got %d" % (self.name, label, len(points)),
+                           location=self.name)
+        coords = [(self._coord(x, "%s_p%d" % (label, k), "x"), self._coord(y, "%s_p%d" % (label, k), "y"))
+                  for k, (x, y) in enumerate(points)]
+        vs = [self._v(x, y) for x, y in coords]
+        n = len(vs)
+        for k in range(n):
+            if (vs[(k + 1) % n] - vs[k]).Length < 1e-9:
+                raise SDKError("sdk", "%s.%s: points %d and %d coincide" % (self.name, label, k, (k + 1) % n),
+                               location=self.name, action="drop the repeated point (the polyline closes itself)")
+        sk = self.obj
+        g0 = sk.GeometryCount
+        for k in range(n):
+            sk.addGeometry(OCC.LineSegment(vs[k], vs[(k + 1) % n]), False)
+        sk.addConstraint([Sketcher.Constraint("Coincident", g0 + k, 2, g0 + (k + 1) % n, 1) for k in range(n)])
+        for k, (x, y) in enumerate(coords):
+            self._place(g0 + k, 1, x, y, "%s_p%d" % (label, k))
+        self._check("polyline")
         return self
 
     def polygon(self, n, d, center=(0, 0), name=None):

@@ -323,3 +323,103 @@ def test_servo_u_bracket(cases):
     assert c["report"]["n_solids"] == 1
     assert c["probes"] == [False, False, True, True, True, False]
     assert c["report"]["params"]["ubracket_s_shoulder_length"]["source"].startswith("sdk")
+
+
+# ---- SDK v1 (T2.1) ---------------------------------------------------------------------------
+
+def test_polyline(cases):
+    c = get(cases, "polyline")
+    assert_sound(c)
+    assert vol(c) == pytest.approx(30 * 20 / 2 * 5)
+    assert vol(c, "m1") == pytest.approx(40 * 20 / 2 * 5)
+
+
+def test_rect_rounded_corners(cases):
+    c = get(cases, "rounded_rect")
+    assert_sound(c)
+    rr = lambda w, h, r: (w * h - (4 - math.pi) * r * r) * 2
+    assert vol(c) == pytest.approx(rr(40, 20, 5) + rr(10, 10, 2))
+    assert vol(c, "m1") == pytest.approx(rr(50, 20, 3) + rr(10, 10, 2))
+
+
+def test_fillet_chamfer_on_cap_edges_survive_edge_split(cases):
+    """Dress-ups go right after the pad they name, so a later notch crossing the edge cannot rename it (S13)."""
+    c = get(cases, "fillet_chamfer")
+    assert_sound(c)
+    assert c["order"] == ["base_pad", "base_pad_fillet", "base_pad_chamfer", "notch_pocket"]
+    assert vol(c, "m1") > 2 * vol(c)                  # resized, not a stale shape
+    assert all(c["split"].values())
+    # rounded top edges x3, chamfered bottom edge, sketch-rounded corner; core and side wall solid
+    assert c["probes"] == [False, False, False, False, False, True, True]
+    params = c["report"]["params"]
+    assert {"base_pad_fillet_r", "base_pad_chamfer_size", "base_rect0_r"} <= set(params)
+
+
+def test_hole_countersink_and_floor_fillet(cases):
+    c = get(cases, "hole_edges")
+    assert_sound(c)
+    assert c["probes"] == [False, True, True]
+    assert vol(c, "m1") < vol(c)                      # deeper, wider bore: dress-ups followed
+
+
+def test_shell(cases):
+    c = get(cases, "shell")
+    assert_sound(c)
+    assert vol(c) == pytest.approx(40 * 30 * 20 - 36 * 26 * 18)
+    assert vol(c, "m1") == pytest.approx(40 * 30 * 20 - 34 * 24 * 17)
+
+
+def test_mirror(cases):
+    c = get(cases, "mirror")
+    assert_sound(c)
+    boss = math.pi * 9 * 5
+    assert vol(c) == pytest.approx(80 * 40 * 10 + 2 * boss)
+    assert c["probes"] == [True, True, False]         # mirror copy followed the original to x = 25
+
+
+def test_pattern_linear_count_is_a_param(cases):
+    c = get(cases, "pattern_linear")
+    assert_sound(c)
+    boss = math.pi * 9 * 5
+    assert vol(c) == pytest.approx(80 * 40 * 10 + 3 * boss)
+    assert vol(c, "m1") == pytest.approx(80 * 40 * 10 + 4 * boss)
+    assert c["report"]["params"]["pattern0_count"]["unit"] == "-"
+    assert c["probes"] == [True, True]
+
+
+def test_pattern_polar(cases):
+    c = get(cases, "pattern_polar")
+    assert_sound(c)
+    disc, boss = math.pi * 900 * 5, math.pi * 9 * 5
+    assert vol(c) == pytest.approx(disc + 6 * boss)
+    assert vol(c, "m1") == pytest.approx(disc + 3 * boss)
+
+
+def test_boss_with_insert_hole(cases):
+    c = get(cases, "boss")
+    assert_sound(c)
+    ins = load_card("fastener/m3_insert")["params_mm"]
+    a = lambda d: math.pi * (d / 2) ** 2
+    hole = 2 * a(ins["hole_d"]) * ins["hole_depth"]
+    assert vol(c) == pytest.approx(40 * 40 * 10 + 2 * a(8) * 6 - hole)   # the pedestal sits inside the plate
+    assert vol(c, "m1") == pytest.approx(40 * 40 * 10 + 2 * a(8) * 8 - hole)
+    assert c["probes"] == [False, True, True]
+
+
+def test_rib(cases):
+    c = get(cases, "rib")
+    assert_sound(c)
+    assert vol(c) == pytest.approx(40 * 20 * 5 + 15 * 15 / 2 * 3)
+    assert vol(c, "m1") == pytest.approx(40 * 20 * 5 + 15 * 15 / 2 * 4)
+
+
+def test_v1_errors(cases):
+    c = get(cases, "errors")
+    assert "pad or pocket" in c["fillet_not_extrusion"]["cause"]
+    assert "use start, end or caps" in c["fillet_class"]["cause"]
+    assert "rounded in the sketch" in c["fillet_side"]["cause"] and "r=" in c["fillet_side"]["action"]
+    assert "rounded in the sketch" not in c["shell_side"]["cause"]
+    assert "< half the smaller side" in c["rect_radius"]["cause"]
+    assert "int >= 2" in c["pattern_count"]["cause"]
+    assert "not a feature" in c["not_a_feature"]["cause"]
+    assert "coincide" in c["polyline_repeat"]["cause"]

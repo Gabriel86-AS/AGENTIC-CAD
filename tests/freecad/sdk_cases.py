@@ -283,6 +283,119 @@ def u_bracket():
         sdk.configure()
 
 
+# ---- SDK v1 (T2.1) ---------------------------------------------------------------------------
+
+@case
+def polyline():
+    part = Part("polyline_case")
+    part.pad(part.sketch("sk", on="XY").polyline([(0, 0), (30, 0), (0, 20)]), 5)
+    return run(part, {"sk_poly0_p1_x": 40})
+
+
+@case
+def rounded_rect():
+    part = Part("rrect_case")
+    part.pad(part.sketch("sk", on="XY").rect(40, 20, r=5), 2)
+    top = part.datum("top", plane="XY", offset=2)
+    part.pad(part.sketch("off", on=top).rect(10, 10, center=(10, 0), r=2), 2)   # off-centre, stacked
+    return run(part, {"sk_rect0_r": 3, "sk_rect0_w": 50})
+
+
+@case
+def fillet_chamfer():
+    """S13 geometry: rounded-corner plate, top fillet + bottom chamfer on its pad, a notch pocket made
+    before them. Moving the notch across the +x top edge splits it: the dress-ups sit before the notch."""
+    part = Part("dress_case")
+    p = part.params(plate_w=40, plate_d=20, thick=10, notch_x=5)
+    pad = part.pad(part.sketch("base", on="XY").rect(p.plate_w, p.plate_d, r=4), p.thick)
+    top = part.datum("top", plane="XY", offset=p.thick)
+    part.pocket(part.sketch("notch", on=top).rect(4, 6, center=(p.notch_x, 0)), depth=3)
+    part.fillet(pad, 2, edges="end")
+    part.chamfer("base_pad", 1, edges="start")
+    out = run(part, {"plate_w": 60, "thick": 15})
+    out["order"] = [o.Name for o in part.body.Group if o.isDerivedFrom("PartDesign::Feature")]
+    part.set_param("notch_x", 28)                                # notch 26..30: crosses the +x top edge
+    out["split"] = part.report()["gates"]
+    out["probes"] = inside(part, (29.8, 6, 14.8), (-29.8, 6, 14.8), (10, 9.8, 14.8),   # rounded top edges
+                           (29.8, 6, 0.2), (29.2, 9.2, 7), (10, 0, 7), (29.8, 6, 7))  # chamfered bottom, corner r 4, core, side
+    return out
+
+
+@case
+def hole_edges():
+    """Countersink (chamfer of a blind pocket's rim) and a floor fillet (its end edges)."""
+    part, p = plate("hole_edges_case", w=40, d=40, t=10)
+    top = part.datum("top", plane="XY", offset=p.thick)
+    bore = part.pocket(part.sketch("bore", on=top).circle(6, center=(10, 10)), depth=6)
+    part.chamfer(bore, 1, edges="start", name="countersink")
+    part.fillet(bore, 1, edges="end", name="floor_round")
+    part.doc.recompute()
+    probes = inside(part, (13.4, 10, 9.6), (12.85, 10, 4.15), (14.5, 10, 5))  # countersunk, floor fillet, wall
+    out = run(part, {"bore_pocket_depth": 7, "bore_circle0_d": 7})
+    out["probes"] = probes
+    return out
+
+
+@case
+def shell():
+    part, p = plate("shell_case", w=40, d=30, t=20)
+    part.shell("base_pad", 2, open="end")
+    return run(part, {"base_pad_shell_wall": 3})
+
+
+def _boss_plate(name, w=80, d=40, at=(20, 10)):
+    part, p = plate(name, w=w, d=d, t=10)
+    top = part.datum("top", plane="XY", offset=p.thick)
+    boss = part.pad(part.sketch("bossk", on=top).circle(6, center=at), 5)
+    return part, boss
+
+
+@case
+def mirror():
+    part, boss = _boss_plate("mirror_case")
+    part.mirror(boss, plane="YZ")
+    out = run(part, {"bossk_circle0_cx": 25})
+    out["probes"] = inside(part, (-25, 10, 12), (25, 10, 12), (-20, 10, 12))
+    return out
+
+
+@case
+def pattern_linear():
+    part, boss = _boss_plate("linear_case", at=(-30, 0))
+    part.pattern_linear(boss, "x", spacing=20, count=3)
+    out = run(part, {"pattern0_count": 4})
+    out["probes"] = inside(part, (30, 0, 12), (10, 0, 12))
+    return out
+
+
+@case
+def pattern_polar():
+    part = Part("polar_case")
+    part.pad(part.sketch("disc", on="XY").circle(60), 5)
+    top = part.datum("top", plane="XY", offset=5)
+    boss = part.pad(part.sketch("bossk", on=top).circle(6, center=(20, 0)), 5)
+    part.pattern_polar(boss, "z", count=6)
+    return run(part, {"pattern0_count": 3})
+
+
+@case
+def boss():
+    part, p = plate("boss_case", w=40, d=40, t=10)
+    top = part.datum("top", plane="XY", offset=p.thick)
+    part.boss(top, at=[(10, 10), (-10, -10)], d=8, height=6, hole="insert_m3")
+    part.boss("XY", at=(0, 0), d=10, height=3, name="pedestal")   # on an origin plane: grows +z inside the plate
+    out = run(part, {"boss0_height": 8})
+    out["probes"] = inside(part, (10, 10, 17), (13.5, 10, 17), (10, 10, 9.5))  # hole, boss wall, below the hole
+    return out
+
+
+@case
+def rib():
+    part, p = plate("rib_case", w=40, d=20, t=5)
+    part.rib("XZ", [(0, 5), (15, 5), (0, 20)], thick=3)
+    return run(part, {"rib0_thick": 4})
+
+
 PROGRAM = '''
 import math
 from agenticcad import Part
@@ -333,6 +446,14 @@ def errors():
         "counterbore_tap": lambda: Part("err_l").hole("XY", at=(0, 0), fit="tap_m3", counterbore=True),
         "bay_not_electronics": lambda: _with_conn("err_m").electronics_bay("servo/mg996r", at="conn"),
         "u_bracket_not_servo": lambda: _with_conn("err_n").servo_u_bracket("electronics/pca9685", at="conn"),
+        "fillet_not_extrusion": lambda: _fillet_mirror(),
+        "fillet_class": lambda: _err_plate("err_q").fillet("base_pad", 1, edges="top"),
+        "fillet_side": lambda: _err_plate("err_v").fillet("base_pad", 1, edges="side"),
+        "rect_radius": lambda: Part("err_w").sketch("sk").rect(10, 6, r=3),
+        "shell_side": lambda: _err_plate("err_r").shell("base_pad", 1, open="side"),
+        "pattern_count": lambda: _err_plate("err_s").pattern_linear("base_pad", "x", 10, 1),
+        "not_a_feature": lambda: _err_plate("err_t").fillet("nope", 1),
+        "polyline_repeat": lambda: Part("err_u").sketch("sk").polyline([(0, 0), (5, 0), (5, 0), (0, 5)]),
     }
     out = {}
     for k, fn in attempts.items():
@@ -342,6 +463,15 @@ def errors():
         except SDKError as e:
             out[k] = e.signal
     return out
+
+
+def _err_plate(name):
+    return plate(name)[0]
+
+
+def _fillet_mirror():
+    part, boss = _boss_plate("err_p")
+    part.fillet(part.mirror(boss), 1)
 
 
 def _pocket_both():

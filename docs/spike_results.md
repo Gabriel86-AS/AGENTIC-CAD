@@ -16,6 +16,8 @@ raw results land in `spikes/results/<id>.json`.
 | S9 | PASS | mm / mm³ / mm⁵, density 1; feature `.Shape` excludes parent `App::Part` placement; inertia about CoM |
 | S10 | PASS | hang → timeout kill; segfault → "no response"; 2 degenerate inputs are **silent** ⇒ gate on `n_solids == 1` |
 | S11 | PASS (Agent SDK live) · API backend offline only | One `ToolSpec` list runs on both backends; built-ins off; writes outside `parts/<own>.py` denied |
+| S13 (P2) | PASS (insert-after) | Fillet/Chamfer edge refs survive size edits and reopen; break (`?EdgeN`, Invalid, stale shape kept) when a later feature splits the edge ⇒ insert the dress-up right after the feature it names |
+| S14 (P2) | PASS | Mirrored / LinearPattern / PolarPattern / Thickness headless with Length, Occurrences, Angle, Value bound to Params; **a Transformed made by `newObject` does not become the Tip** |
 
 ## S1 — Assembly WB headless
 - `import JointObject, UtilsAssembly` works in freecadcmd; `pivy` is bundled in the Windows installer.
@@ -136,3 +138,21 @@ Code: `llm/tools.py` (ToolSpec + `PartWorkspace`), `llm/backend.py` (`LLMBackend
 - Results (`spikes/results/t07.json`), Docker image `agenticcad-ros:jazzy` (`docker/ros-tools/Dockerfile`: ROS 2 Jazzy + Gazebo Harmonic + pinocchio): **all four pass**.
   yourdfpy (Windows venv): FK at q = 0.5 exact, both meshes load. check_urdf: parsed, root base_link → arm_link. `gz sdf -p`: SDF emitted.
   pinocchio: nq 1, effort 0.54, velocity 7.0, link masses 0.055 / 0.003048, FK error 0. (WSL Ubuntu-22.04 + Humble also passes check_urdf: `AGENTICCAD_LINUX=wsl`.)
+
+## S13 — dress-up edge references (T2.1, 2026-10-10)
+- FreeCAD 1.1 stores `Base` sub-names as mapped element names; size edits and save/reopen re-resolve them.
+- A later feature that splits a referenced edge (notch moved across it) ⇒ `?Edge10`, "Invalid edge link", the
+  feature keeps its old shape (volume looks fine: only `State` tells). Undoing the edit recovers.
+- Same plate with the dress-up inserted right after the pad (`body.Tip = pad`, `newObject`, Tip back): all edits pass.
+- Follow-up probe: **edges along a pad (generated from sketch vertices, mapped `#f:1;:G;XTR`) are renamed on every
+  recompute** (string-table id changes); cap edges (`#b:1;:H…`, `#16:1;:U;XTR`) are stable. ⇒ SDK offers cap
+  edges only (`start`/`end`/`caps`); vertical edges are rounded in the sketch (`rect(..., r=)`). D45.
+- `PartDesign::AddSubShape` of a pad is in the body frame (identity placement).
+
+## S14 — patterns, mirror, shell (T2.1, 2026-10-10)
+- `Mirrored.MirrorPlane = (origin plane | datum, [""])`, `Originals = [features]`; `TransformMode` = "Features".
+- `LinearPattern`: `Direction = (X_Axis, [""])`, `Length` (overall) ← `Params.spacing * (Params.count - 1)`,
+  `Occurrences` ← unitless cell `=3`. `PolarPattern`: `Axis`, `Angle` (360 = evenly round; else both ends
+  included), `Occurrences`. Counts edit and survive reopen.
+- **`body.newObject` does not move the Tip to a Transformed feature** (Originals empty at creation): set `body.Tip`.
+- `Thickness`: `Base = (feature, [faces])`, `Value` bound; default is inward, faces removed are open.
