@@ -1,0 +1,199 @@
+{
+  "units": "mm",
+  "ground": "base",
+  "dof": 2,
+  "requirements": {
+    "pack": "manipulator",
+    "dof": 2,
+    "reach_mm": 150,
+    "payload_g": 50,
+    "components_requested": [
+      "servo/mg996r"
+    ],
+    "electronics": "generic",
+    "material": "PETG"
+  },
+  "params": {
+    "arm_len": {
+      "value": 155,
+      "min": 120,
+      "max": 200,
+      "unit": "mm"
+    }
+  },
+  "components": [
+    {
+      "id": "s_yaw",
+      "card": "servo/mg996r",
+      "attach_to": "base.servo_mount"
+    },
+    {
+      "id": "s_sh",
+      "card": "servo/mg996r",
+      "attach_to": "turret.sh_mount"
+    },
+    {
+      "id": "ebay",
+      "card": "electronics/generic_bay",
+      "attach_to": "base.ebay_mount"
+    }
+  ],
+  "parts": [
+    {
+      "name": "base",
+      "intent": "ground plate with the yaw servo tower and the electronics bay",
+      "connectors": [
+        {
+          "name": "servo_mount",
+          "o": [
+            -10,
+            0,
+            36
+          ],
+          "z": [
+            0,
+            0,
+            1
+          ],
+          "x": [
+            1,
+            0,
+            0
+          ],
+          "label": "servo_mount"
+        },
+        {
+          "name": "ebay_mount",
+          "o": [
+            75,
+            0,
+            5
+          ],
+          "z": [
+            0,
+            0,
+            1
+          ],
+          "x": [
+            -1,
+            0,
+            0
+          ],
+          "label": "ebay_mount"
+        }
+      ]
+    },
+    {
+      "name": "turret",
+      "intent": "yaw-driven plate holding the shoulder servo (axis +y) and its idler lug",
+      "connectors": [
+        {
+          "name": "horn_seat",
+          "o": [
+            0,
+            0,
+            0
+          ],
+          "z": [
+            0,
+            0,
+            1
+          ],
+          "x": [
+            1,
+            0,
+            0
+          ],
+          "label": "servo_horn_face"
+        },
+        {
+          "name": "sh_mount",
+          "o": [
+            -10,
+            12,
+            40
+          ],
+          "z": [
+            0,
+            1,
+            0
+          ],
+          "x": [
+            1,
+            0,
+            0
+          ],
+          "label": "servo_mount"
+        }
+      ]
+    },
+    {
+      "name": "arm",
+      "intent": "shoulder U bracket + beam to the tool",
+      "connectors": [
+        {
+          "name": "horn_seat",
+          "o": [
+            0,
+            0,
+            0
+          ],
+          "z": [
+            0,
+            0,
+            1
+          ],
+          "x": [
+            1,
+            0,
+            0
+          ],
+          "label": "servo_horn_face"
+        },
+        {
+          "name": "tool",
+          "o": [
+            155,
+            0,
+            -21.95
+          ],
+          "z": [
+            1,
+            0,
+            0
+          ],
+          "x": [
+            0,
+            0,
+            1
+          ],
+          "label": "tool"
+        }
+      ]
+    }
+  ],
+  "joints": [
+    {
+      "name": "j_yaw",
+      "type": "revolute",
+      "parent": "s_yaw.horn",
+      "child": "turret.horn_seat",
+      "driver": "s_yaw",
+      "limits": {
+        "lower": -1.57,
+        "upper": 1.57
+      }
+    },
+    {
+      "name": "j_shoulder",
+      "type": "revolute",
+      "parent": "s_sh.horn",
+      "child": "arm.horn_seat",
+      "driver": "s_sh",
+      "limits": {
+        "lower": -1.57,
+        "upper": 0.3
+      }
+    }
+  ]
+}
