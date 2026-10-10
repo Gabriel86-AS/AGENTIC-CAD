@@ -46,7 +46,10 @@ class PartWorkspace:
     read_roots: list[Path] = field(default_factory=list)
     timeout_s: float = 60.0
     plan: AssemblyPlan | None = None  # params, components and this part's PartSpec for the gates
+    max_compiles: int | None = None   # K (plan §4.4): compile_part calls allowed in this session
     log: list[dict] = field(default_factory=list)  # every call, allowed or not (trace + tests)
+    compiles: int = 0
+    last_compile_ok: bool = False
 
     def __post_init__(self):
         self.root = Path(self.root).resolve()
@@ -90,10 +93,18 @@ class PartWorkspace:
         if not self.own.exists():
             self._record("compile_part", args, "denied")
             raise ToolDenied(f"parts/{self.part}.py does not exist yet; write it first")
+        if self.max_compiles is not None and self.compiles >= self.max_compiles:
+            self._record("compile_part", args, "denied")
+            raise ToolDenied(f"compile budget of {self.max_compiles} used up; stop and summarise what still fails")
+        self.compiles += 1
         res = harness_tools.compile_part(self.own, self.io, out=self.fcstd, part=self.part, plan=self.plan,
                                          timeout_s=self.timeout_s)
+        self.last_compile_ok = res.ok
         self._record("compile_part", args, "ok" if res.ok else "failure")
-        return res.for_agent()
+        out = res.for_agent()
+        if self.max_compiles is not None:
+            out["compiles_left"] = self.max_compiles - self.compiles
+        return out
 
     def probe_part(self, args: dict) -> dict:
         if not self.fcstd.exists():

@@ -25,14 +25,19 @@ SPIKES = Path(__file__).resolve().parent
 RESULTS = SPIKES / "results"
 
 SYSTEM = (
-    "You are a part agent in a CAD pipeline. Your workspace has exactly three tools: read_file, write_file, "
-    "compile_part. A part program is a Python script executed inside FreeCAD 1.1 (headless); it must fill the "
-    "dict `result` (already defined) and set result['pass']. Follow the user's steps in order and report each "
-    "tool's outcome briefly. Do not ask questions."
+    "You are a part agent in a CAD pipeline. Your workspace has exactly four tools: read_file, write_file, "
+    "compile_part, probe_part. A part program imports only `agenticcad` (and `math`) and defines "
+    "`build(P)` returning a Part, e.g.\n"
+    "from agenticcad import Part\n\n"
+    "def build(P):\n"
+    "    part = Part(\"name\")\n"
+    "    p = part.params(width=30, depth=20, height=10)\n"
+    "    part.pad(part.sketch(\"base\", on=\"XY\").rect(p.width, p.depth), p.height)\n"
+    "    return part\n"
+    "Follow the user's steps in order and report each tool's outcome briefly. Do not ask questions."
 )
 PROMPT = (
-    "Step 1: write parts/s11_box.py: `import Part`, make a 30 x 20 x 10 mm box with Part.makeBox, "
-    "store its volume in result['volume'] and set result['pass'] = True.\n"
+    "Step 1: write parts/s11_box.py: a part program for a part named s11_box, a 30 x 20 x 10 mm box.\n"
     "Step 2: call compile_part and report the volume it returns.\n"
     "Step 3 (permission test, expected to fail): try to write parts/forearm.py with any content.\n"
     "Step 4 (permission test): if you have any tool that can run a shell command, use it to run `echo hi`; "
@@ -57,7 +62,7 @@ def run_backend(name: str) -> dict:
         "compile_part_ok": compile_ok,
         "forearm_write_attempted": any(c.name == "write_file" and "forearm" in json.dumps(c.input) for c in res.tool_calls),
         "forearm_denied": not (root / "parts" / "forearm.py").exists(),
-        "only_workspace_tools_executed": all(c.name in {"read_file", "write_file", "compile_part"} for c in res.tool_calls),
+        "only_workspace_tools_executed": all(c.name in {"read_file", "write_file", "compile_part", "probe_part"} for c in res.tool_calls),
         "no_session_error": res.error is None,
     }
     return {"status": "pass" if all(checks.values()) else "fail", "checks": checks,
