@@ -6,7 +6,8 @@
 The checkpoint comes after the plan validates (it needs the joint tree and the torque estimate) and
 before any part is generated (the expensive step). Budgets (plan §4.4): K compiles per part session, one
 escalation per part session, `part_rounds` sessions per part, ≤ 2 design rollbacks, `max_rounds` pipeline
-runs. On exhaustion the job ends with its open failures listed, never a silent pass.
+runs. A CODE route whose parts have spent their sessions on an assembly / print failure becomes a design
+rollback while rollbacks remain (the layout, not the part code, is the problem). On exhaustion the job ends with its open failures listed, never a silent pass.
 """
 import json
 import re
@@ -148,8 +149,13 @@ def run(prompt: str, job_dir: Path, backends: stages.Backends, approve: Approve 
         if r.kind == "stop":
             return finish("fail", r.reason, r.signals)
         if r.kind == "code":
-            todo = r.parts
-            continue
+            spent = [n for n in r.parts if sessions.get(n, 0) >= b.part_rounds]
+            if not (spent and rep.failed_stage in ("assembly", "print") and res.rollbacks < b.design_rollbacks):
+                todo = r.parts
+                continue
+            # part agents could not clear an assembly/print failure: the layout itself is the problem
+            r.signals = [x for v in r.parts.values() for x in v]
+            log("   CODE budget spent on %s -> DESIGN" % ", ".join(spent))
         if res.rollbacks >= b.design_rollbacks:
             return finish("fail", "design rollback budget exhausted", r.signals)
         res.rollbacks += 1

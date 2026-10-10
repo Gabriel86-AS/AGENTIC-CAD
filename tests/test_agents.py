@@ -122,7 +122,9 @@ class Scripted(LLMBackend):
                                                                          "total_cost_usd": 0.01})
 
 
-def scripted_backends(log):
+def scripted_backends(log, stubborn=False):
+    """stubborn: the turret part agent keeps its defect until a design revision touches the turret."""
+    designs = []
     golden = {p.stem: p.read_text(encoding="utf-8") for p in (GOLDEN / "parts").glob("*.py")}
     thin_turret = golden["turret"].replace("wall_t=8", "wall_t=5").replace("sh_y=12", "sh_y=12")   # M2 tap 0.1 mm from the wall face
 
@@ -136,14 +138,19 @@ def scripted_backends(log):
     def design(prompt, call):
         broken = dict(PLAN, dof=3)
         assert not call("check_plan", {"plan": broken})["ok"]
-        assert call("submit_plan", {"plan": PLAN})["submitted"]
+        plan = PLAN
+        if designs:     # revision: reword the turret intent, so the turret is regenerated
+            plan = dict(PLAN, parts=[dict(q, intent=q["intent"] + " Revised.") if q["name"] == "turret" else q
+                                     for q in PLAN["parts"]])
+        designs.append(prompt)
+        assert call("submit_plan", {"plan": plan})["submitted"]
         return "plan submitted"
 
     def part(prompt, call):
         name = prompt.split("parts/")[1].split(".py")[0]
         log.append((name, "feedback" if "failed these checks" in prompt else "first"))
         src = golden[name]
-        if name == "turret" and "failed these checks" not in prompt:
+        if name == "turret" and ("failed these checks" not in prompt or (stubborn and len(designs) < 2)):
             src = thin_turret
         call("write_file", {"path": f"parts/{name}.py", "content": src})
         assert call("compile_part", {})["ok"]
@@ -166,6 +173,16 @@ def test_job_end_to_end_with_code_repair(tmp_path):
     for f in ("spec.json", "bom.json", "plan.json", "checkpoint.txt", "trace.jsonl", "result.json", "context/arm.md"):
         assert (job / f).exists(), f
     assert json.loads((job / "result.json").read_text())["status"] == "pass"
+
+
+def test_job_spent_code_budget_on_print_failure_rolls_back_design(tmp_path):
+    log = []
+    res = run(B13, tmp_path / "job", scripted_backends(log, stubborn=True), approve=lambda text: True,
+              budgets=Budgets(workers=3, part_rounds=2), description=False, log=lambda m: None)
+    assert res.status == "pass", (res.reason, res.open_failures)
+    # L7 -> CODE turret; L7 again, budget spent -> DESIGN; regenerated turret L7 -> CODE (budget reset); pass
+    assert res.rollbacks == 1 and res.rounds == 4
+    assert res.parts["turret"]["sessions"] == 4 and res.parts["arm"]["sessions"] == 1
 
 
 def test_job_aborts_at_checkpoint(tmp_path):
