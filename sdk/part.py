@@ -431,6 +431,8 @@ class Part:
     def _card(self, component):
         if "/" in component:
             card_id, prefix = component, component.split("/")[-1]
+            if name_error(prefix):                  # "608zz": not a valid alias start -> "bearing_608zz"
+                prefix = component.replace("/", "_")
         elif component in context.components:
             card_id, prefix = context.components[component], component
         else:
@@ -533,8 +535,11 @@ class Part:
         return made
 
     def _screw_depth(self, screw, prefix):
-        nominal = float(screw.upper().lstrip("M"))
-        return self._q(2.5 * nominal, "%s_screw_depth" % prefix, source="sdk: 2.5 x nominal")
+        """Self-tapping depth 2.5 x nominal as `<prefix>_screw_depth` (one alias, shared by every call)."""
+        alias = "%s_screw_depth" % prefix
+        if alias not in self.params_info:
+            self._add_param(alias, 2.5 * float(screw.upper().lstrip("M")), source="sdk: 2.5 x nominal")
+        return Q(self.params_info[alias]["value"], "Params." + alias)
 
     def _standoffs(self, card, prefix, frame, name, so, host_t):
         """Bosses from z = 0 to h. rect: tapped holes h deep. rect_slotted: obround bosses along x, a

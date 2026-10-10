@@ -1,0 +1,28 @@
+id: bearing/608zz
+kind: bearing.ball
+verified: true             # ISO 15 boundary dimensions; abutment diameters from the SKF 608-2Z table
+source: >-
+  Deep groove ball bearing 608-2Z / 608ZZ, ISO 15 dimension series 10: d 8, D 22, B 7 mm.
+  Abutment (SKF catalogue, 608-2Z): shaft shoulder da min 10 mm, housing shoulder Da max 20 mm.
+  Mass approx. 12 g.
+mass_kg: 0.012
+
+# Card frame: the bearing face that rests on the housing shoulder (seat floor), centred on the axis,
+# +z through the bearing (it occupies z 0..width). Read by bearing_seat() / turntable_base().
+params_mm:
+  bore_d: 8.0
+  outer_d: 22.0
+  width: 7.0
+  shaft_shoulder_d: 10.0   # min shoulder on the shaft side (clears the outer race)
+  housing_shoulder_d: 20.0 # max lip in the housing (clears the inner race and seals)
+
+connectors:
+  seat: { o: [0, 0, 0], z: [0, 0, 1], x: [1, 0, 0], label: bearing_seat }
+  axis: { o: [0, 0, "width / 2"], z: [0, 0, 1], x: [1, 0, 0], label: bearing_axis }
+
+interfaces:
+  seat:   { outer_d: outer_d, depth: width, lip_d: housing_shoulder_d }
+  bore:   { d: bore_d, shoulder_d: shaft_shoulder_d }
+  volume: { centre_xy: [0, 0], size: [outer_d, outer_d, width], bottom_z: 0 }   # L5 envelope
+
+model: null

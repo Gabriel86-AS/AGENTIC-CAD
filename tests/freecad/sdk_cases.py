@@ -396,6 +396,70 @@ def rib():
     return run(part, {"rib0_thick": 4})
 
 
+# ---- manipulator pack composites (T2.1) --------------------------------------------------------
+
+@case
+def bearing_seat():
+    part, p = plate("seat_case", w=40, d=40, t=10)
+    part.connector("seat", origin=(0, 0, 3), z=(0, 0, 1), x=(1, 0, 0), label="bearing_seat")
+    s = part.bearing_seat("bearing/608zz", at="seat")
+    out = {"ret": {k: float(getattr(s, k)) for k in ("outer_d", "depth", "lip_d", "bore_d")}}
+    out.update(run(part, {"seat_o_z": 5, "thick": 12}))
+    return out
+
+
+@case
+def horn_coupler():
+    sdk.configure(components={"s_elbow": "servo/mg996r"})
+    try:
+        part = Part("coupler_case")
+        part.connector("elbow_horn", origin=(0, 0, 0), z=(0, 0, 1), x=(1, 0, 0), label="servo_horn_face")
+        c = part.horn_coupler("s_elbow", at="elbow_horn")
+        out = {"ret": {k: float(getattr(c, k)) for k in ("hub_d", "thick")}}
+        out.update(run(part, {"coupler_s_elbow_wall": 4}))
+        return out
+    finally:
+        sdk.configure()
+
+
+@case
+def link_bar():
+    part = Part("link_bar_case")
+    part.link_bar("XY", 80, 20, 6, end_holes="clearance_m3")
+    return run(part, {"link0_length": 100})
+
+
+@case
+def hollow_link():
+    part = Part("hollow_link_case")
+    part.hollow_link("XY", 100, 20, 8, wall=2)
+    out = run(part, {"link0_length": 120})
+    out["probes"] = inside(part, (60, 0, 7), (60, 0, 1), (10, 0, 7), (60, 9, 7))  # trough, floor, solid end, side wall
+    return out
+
+
+@case
+def turntable():
+    sdk.configure(components={"s_yaw": "servo/mg996r"})
+    try:
+        part = Part("turntable_case")
+        part.connector("yaw_mount", origin=(0, 0, 0), z=(0, 0, 1), x=(1, 0, 0), label="servo_mount")
+        t = part.turntable_base("s_yaw", at="yaw_mount")
+        r = {k: float(getattr(t, k)) for k in ("base_d", "roller_r", "top_z", "horn_z", "axle_z", "bottom_z", "axis_x")}
+        ax, rr, top = r["axis_x"], r["roller_r"], r["top_z"]
+        c60, s60 = math.cos(math.radians(60)), math.sin(math.radians(60))
+        part.doc.recompute()
+        out = {"ret": r, "probes": inside(
+            part, (ax + rr, 0, top - 0.5), (ax - rr * c60, rr * s60, top - 0.5),         # roller pockets 0 and 1
+            (ax + rr + 2 + 1.5, 0, r["axle_z"]),                                        # axle hole beyond pocket 0
+            (ax + rr * c60, rr * s60, top - 0.5),                                       # ring between rollers
+            (0, 0, 1), (0, 0, -10), (0, 0, r["bottom_z"] + 1))}                         # well, case pocket, floor
+        out.update(run(part, {"turntable_s_yaw_protrude": 2}))
+        return out
+    finally:
+        sdk.configure()
+
+
 PROGRAM = '''
 import math
 from agenticcad import Part
@@ -454,6 +518,9 @@ def errors():
         "pattern_count": lambda: _err_plate("err_s").pattern_linear("base_pad", "x", 10, 1),
         "not_a_feature": lambda: _err_plate("err_t").fillet("nope", 1),
         "polyline_repeat": lambda: Part("err_u").sketch("sk").polyline([(0, 0), (5, 0), (5, 0), (0, 5)]),
+        "seat_not_bearing": lambda: _with_conn("err_x").bearing_seat("servo/mg996r", at="conn"),
+        "turntable_rollers": lambda: _with_conn("err_y").turntable_base("servo/mg996r", at="conn", rollers=2),
+        "hollow_no_room": lambda: Part("err_z").hollow_link("XY", 30, 20, 6),
     }
     out = {}
     for k, fn in attempts.items():

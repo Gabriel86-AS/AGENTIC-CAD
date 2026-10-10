@@ -4,9 +4,9 @@
 updated: 2026-10-10
 plan_version: v0.4 (IMPLEMENTATION_PLAN.md)
 current_phase: P2
-current_phase_status: in_progress; T2.1 core feature calls done (S13, S14, D45). P1 DONE 2026-10-10
-next_action: T2.1 rest = bearing cards (608ZZ, 623ZZ) + manipulator-pack composites bearing_seat, horn_coupler, link_bar, hollow_link, turntable_base, then split (dovetail/screws); then T2.2 L4 flex. Watch: the CODE→DESIGN escalation (D43) is offline-tested only; O13 (GUI unit-mismatch message on drawer open) is cosmetic
-code_written: harness/ (worker protocol + tests), spikes/run.py, spikes/s01-s10, spikes/drivers/s10.py, components/ (card.py with card expressions, build.py, cards: servo/mg996r (+ horn), electronics/generic_bay, esp32_devkit, pca9685, fastener/m3_screw, m3_insert; servo_mg996r generator), tests/test_components.py, llm/ (tools, backend, agent_sdk_backend, claude_api_backend), spikes/s11_llm.py, spikes/urdf_1joint/, tests/test_llm_permissions.py, schemas/ (plan, signal, profile, names, export → schemas/json/), profiles/ (generic_fdm, materials), tests/test_schemas.py, sdk/ (expr, sketch, part, errors), tests/test_sdk.py + tests/freecad/sdk_cases.py, docs/sdk.md, harness/ (lint L0, part_ops worker ops, tools compile_part/probe_part, feedback), tests/test_harness_tools.py, assembly/ (kinematics, writer, builder), tests/test_assembly.py + tests/freecad/assembly_reopen.py, assembly/owners.py, validate/ (poses, statics, masses, plan_check, sweep worker ops, assembly_check, printability), tests/test_validate.py, export/urdf.py, description/checks.py, tests/test_export.py, packs/ (loader; manipulator: composites.py servo_u_bracket, knowledge.md, bench.yaml B1-1..5), tests/test_packs.py, harness/pipeline.py (run_job: plan → parts → L5/L6 → L7 → build → export → D1/D2/D4), bench/golden/b1_3/ (plan.json + parts base/turret/arm), tests/test_golden.py + tests/freecad/golden_edit.py, SDK v1 core calls (sketch.polyline, rect r=, fillet/chamfer/shell by feature cap class, mirror, pattern_linear/polar, boss, rib), spikes s13/s14 (169 tests total)
+current_phase_status: in_progress; T2.1 done (split moved to T2.4). P1 DONE 2026-10-10
+next_action: T2.2 L4 flex test (§3.1; set_param + report per param range, cap 30 per part); then T2.3 L5 sweep + run_tests. Watch: the CODE→DESIGN escalation (D43) is offline-tested only; O13 (GUI unit-mismatch message on drawer open) is cosmetic
+code_written: harness/ (worker protocol + tests), spikes/run.py, spikes/s01-s10, spikes/drivers/s10.py, components/ (card.py with card expressions, build.py, cards: servo/mg996r (+ horn), electronics/generic_bay, esp32_devkit, pca9685, fastener/m3_screw, m3_insert; servo_mg996r generator), tests/test_components.py, llm/ (tools, backend, agent_sdk_backend, claude_api_backend), spikes/s11_llm.py, spikes/urdf_1joint/, tests/test_llm_permissions.py, schemas/ (plan, signal, profile, names, export → schemas/json/), profiles/ (generic_fdm, materials), tests/test_schemas.py, sdk/ (expr, sketch, part, errors), tests/test_sdk.py + tests/freecad/sdk_cases.py, docs/sdk.md, harness/ (lint L0, part_ops worker ops, tools compile_part/probe_part, feedback), tests/test_harness_tools.py, assembly/ (kinematics, writer, builder), tests/test_assembly.py + tests/freecad/assembly_reopen.py, assembly/owners.py, validate/ (poses, statics, masses, plan_check, sweep worker ops, assembly_check, printability), tests/test_validate.py, export/urdf.py, description/checks.py, tests/test_export.py, packs/ (loader; manipulator: composites.py servo_u_bracket, knowledge.md, bench.yaml B1-1..5), tests/test_packs.py, harness/pipeline.py (run_job: plan → parts → L5/L6 → L7 → build → export → D1/D2/D4), bench/golden/b1_3/ (plan.json + parts base/turret/arm), tests/test_golden.py + tests/freecad/golden_edit.py, SDK v1 core calls (sketch.polyline, rect r=, fillet/chamfer/shell by feature cap class, mirror, pattern_linear/polar, boss, rib), spikes s13/s14, bearing cards (608zz, 623zz), manipulator composites bearing_seat / horn_coupler / link_bar / hollow_link / turntable_base (177 tests total)
 git: branch p0-env-spikes, pushed to origin (GitHub auth works from 2026-10-10); latest 8ec7db1 + T2.1 commit
 ```
 
@@ -40,11 +40,9 @@ flowchart LR
 | OS | Windows 11 Home 10.0.26200 | ok |
 | FreeCAD | **1.1.4** (build 20260928), `C:/Program Files/FreeCAD 1.1/bin/freecadcmd.exe` | ok, `freecadcmd -c` runs |
 | FreeCAD Python | 3.11.14 (bundled) | ok |
-| System Python | 3.14 at `C:/Python314` | **don't use** for orchestrator |
+| System Python | 3.14 at `C:/Python314` (conda: none, not needed) | **don't use** for orchestrator |
 | uv | 0.12.24 | ok → orchestrator venv (Python 3.12) |
-| WSL | `Ubuntu`, `Ubuntu-22.04` | present; intended for ROS 2 tools / pinocchio fallback |
 | Docker | 29.4.0, Docker Desktop running 2026-10-09; image `agenticcad-ros:jazzy` present | ok |
-| conda | not installed | not needed unless pinocchio lacks a Windows wheel |
 | Assembly / pivy import headless | `JointObject`, `UtilsAssembly`, `pivy` import; joints solve | ok (S1) |
 | Orchestrator venv | uv-managed CPython 3.12.15, `python-preference = only-managed` (LibreOffice 3.12 on PATH breaks venvs) | ok |
 | WSL | default distro `docker-desktop` (no bash) ⇒ always `wsl -d <distro>`; Ubuntu-22.04 has ROS 2 Humble (`check_urdf`), no gz / pinocchio; Ubuntu 26.04 bare; sudo needs a password | Humble fallback only |
@@ -57,10 +55,10 @@ P1 board (T1.1–T1.12, all done) is in git at 8ec7db1. P1 data mined 2026-10-10
 
 | ID | Task | Status |
 |---|---|---|
-| T2.1 | SDK v1 + tests; fix top P1 misuse | in progress: P1 misuse fixes done (`params(x=P.x)`, unit-symbol names in docs, bench nested gates). Core calls done + tested (S13/S14, D45): `polyline`, `rect(r=)`, `fillet`/`chamfer`/`shell` (cap classes), `mirror`, `pattern_linear`/`polar` (count = unitless param), `boss`, `rib`. Next: bearing cards + pack composites (bearing_seat, horn_coupler, link_bar, hollow_link, turntable_base), `split` |
+| T2.1 | SDK v1 + tests; fix top P1 misuse | done 2026-10-10: P1 misuse fixes; core calls (S13/S14, D45) `polyline`, `rect(r=)`, `fillet`/`chamfer`/`shell` (cap classes), `mirror`, `pattern_linear`/`polar`, `boss`, `rib`; cards `bearing/608zz`, `bearing/623zz`; manipulator composites `bearing_seat`, `horn_coupler`, `link_bar`, `hollow_link`, `turntable_base` (D46). `split` moved to T2.4 (its contract is the L7 build-volume route) |
 | T2.2 | L4 flex test | — |
 | T2.3 | L5 sweep + `run_tests` helpers | — (top failing assembly gate in P1) |
-| T2.4 | L7-full | — |
+| T2.4 | L7-full | — (+ `split(by=dovetail\|screws)` from T2.1: decide how the plan holds the two halves) |
 | T2.5 | Renderer + `render_part`; L3v | — |
 | T2.6 | L8 review | — |
 | T2.7 | Router v2, escalation, budgets | — |
@@ -117,6 +115,7 @@ P1 board (T1.1–T1.12, all done) is in git at 8ec7db1. P1 data mined 2026-10-10
 | D43 | A CODE route whose parts have spent `part_rounds` on an assembly/print failure becomes a design rollback while rollbacks remain (extends D40; the layout, e.g. joint limits vs a wall, is the problem) | B1-1, 2026-10-10 |
 | D44 | Pad/Pocket direction via `SideType` (`One side` / `Symmetric`), never `Midplane` (deprecated in FreeCAD 1.1, warns on every reopen) | user GUI check 2026-10-10 |
 | D45 | Dress-ups (fillet, chamfer, shell) name a pad/pocket + a cap class (`start`/`end`/`caps`), never edge indices; the SDK picks the edges geometrically from that feature's tool shape and inserts the dress-up right after it (Tip moved and restored), so later cuts cannot split its edges. Edges along a pad are not offered (FreeCAD 1.1 renames them every recompute): round them in the sketch (`rect(r=)`). Transformed features: set `body.Tip` explicitly | S13, S14 2026-10-10 |
+| D46 | `bearing_seat`, `horn_coupler`, `link_bar`, `hollow_link`, `turntable_base` live in the manipulator pack (plan §3.3: promoted to core once a second pack needs them). `turntable_base` = servo shaft-up on the base axis + radial-axle 623 rollers whose tops are level with the horn face (turret rides on them). Card ids starting with a digit get the `<family>_<id>` param prefix (`bearing_608zz_outer_d`) | T2.1 2026-10-10 |
 | D24 | Linux-side checks (check_urdf, `gz sdf -p`, pinocchio; later ROS 2 / Gazebo gates) run in Docker image `agenticcad-ros:jazzy` built from `docker/ros-tools/Dockerfile`; package dir mounted read-only. WSL Humble is a fallback (`AGENTICCAD_LINUX=wsl`) | T0.7 |
 
 ## 6. Open items / blockers

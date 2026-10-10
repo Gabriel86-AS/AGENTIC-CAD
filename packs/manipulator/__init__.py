@@ -5,5 +5,5 @@ fails when the spec sets reach_mm, so it is inert for other domains."""
 PACK = {
     "id": "manipulator",
     "summary": "servo-driven serial arms and pan-tilt heads (MG996R / MG90S / SG90 class servos)",
-    "composites": ["servo_u_bracket"],
+    "composites": ["servo_u_bracket", "bearing_seat", "horn_coupler", "link_bar", "hollow_link", "turntable_base"],
 }

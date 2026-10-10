@@ -423,3 +423,83 @@ def test_v1_errors(cases):
     assert "int >= 2" in c["pattern_count"]["cause"]
     assert "not a feature" in c["not_a_feature"]["cause"]
     assert "coincide" in c["polyline_repeat"]["cause"]
+
+
+# ---- manipulator pack composites (T2.1) --------------------------------------------------------
+
+def _a(d):
+    return math.pi * (d / 2) ** 2
+
+
+def test_bearing_seat_press_fit_and_lip(cases):
+    c = get(cases, "bearing_seat")
+    assert_sound(c)
+    b = load_card("bearing/608zz")["params_mm"]
+    od = b["outer_d"] + PROFILE["fits"]["press"]
+    assert c["ret"] == pytest.approx({"outer_d": od, "depth": b["width"], "lip_d": b["housing_shoulder_d"],
+                                      "bore_d": b["bore_d"]})
+    seat = _a(od) * b["width"]
+    assert vol(c) == pytest.approx(40 * 40 * 10 - seat - _a(b["housing_shoulder_d"]) * 3)
+    assert vol(c, "m1") == pytest.approx(40 * 40 * 12 - seat - _a(b["housing_shoulder_d"]) * 5)  # seat followed its connector
+    assert c["report"]["params"]["bearing_608zz_outer_d"]["source"] == "card:bearing/608zz"   # digit-led id -> family prefix
+
+
+def test_horn_coupler_hub(cases):
+    c = get(cases, "horn_coupler")
+    assert_sound(c)
+    p = load_card("servo/mg996r")["params_mm"]
+    clr, tap, min_wall = PROFILE["fits"]["clearance"], PROFILE["screws"]["M2"]["tap"], PROFILE["min_wall_mm"]
+    ceiling, screw = p["horn_disc_t"] + clr / 2, 2.5 * 2
+    thick = ceiling + screw + min_wall
+    assert c["ret"] == pytest.approx({"hub_d": p["horn_disc_d"] + clr + 6, "thick": thick})
+
+    def expected(wall):
+        hub = p["horn_disc_d"] + clr + 2 * wall
+        return (_a(hub) * thick - _a(p["horn_disc_d"] + clr) * ceiling - 4 * _a(tap) * screw
+                - _a(p["horn_access_d"]) * (thick - ceiling))
+
+    assert vol(c) == pytest.approx(expected(3)) and vol(c, "m1") == pytest.approx(expected(4))
+    assert "s_elbow_horn_screw_depth_2" not in c["report"]["params"]   # one shared screw-depth alias
+
+
+def test_link_bar(cases):
+    c = get(cases, "link_bar")
+    assert_sound(c)
+    bar = lambda L: (L * 20 + _a(20)) * 6 - 2 * _a(PROFILE["screws"]["M3"]["clearance"]) * 6
+    assert vol(c) == pytest.approx(bar(80)) and vol(c, "m1") == pytest.approx(bar(100))
+
+
+def test_hollow_link_trough(cases):
+    c = get(cases, "hollow_link")
+    assert_sound(c)
+    link = lambda L: (L * 20 + _a(20)) * 8 - ((L - 40) * 16 + _a(16)) * 6
+    assert vol(c) == pytest.approx(link(100)) and vol(c, "m1") == pytest.approx(link(120))
+    assert c["probes"] == [False, True, True, True]
+
+
+def test_turntable_base(cases):
+    """Yaw base: servo well + pocket on the base axis, rollers level with the horn face carry the turret."""
+    c = get(cases, "turntable")
+    assert_sound(c)
+    p, b = load_card("servo/mg996r")["params_mm"], load_card("bearing/623zz")["params_mm"]
+    clr = PROFILE["fits"]["clearance"]
+    r = c["ret"]
+    horn_z = p["spline_top"] + p["horn_top_above_tip"] - p["horn_disc_t"]
+    assert r["horn_z"] == pytest.approx(horn_z) and r["axis_x"] == pytest.approx(p["shaft_x"])
+    assert r["axle_z"] + b["outer_d"] / 2 == pytest.approx(horn_z)      # roller tops carry the turret at the horn face
+    assert r["top_z"] == pytest.approx(horn_z - 1)
+    reach = math.hypot(p["flange_l"] / 2 + p["shaft_x"], p["body_w"] / 2)
+    assert r["roller_r"] - b["width"] / 2 - clr / 2 > reach + 2          # rollers clear the flange sweep
+    assert 90 <= r["base_d"] <= 120                                      # knowledge: base 90-120 mm
+    R, ax = r["base_d"] / 2, r["axis_x"]
+    assert c["m0"]["bbox"] == pytest.approx([ax - R, -R, r["bottom_z"], ax + R, R, r["top_z"]])
+    assert c["m1"]["bbox"][5] == pytest.approx(horn_z - 2)              # protrude 1 -> 2 lowers the ring
+    # roller pockets 0 and 1, axle hole, ring between rollers, flange well, case pocket, floor
+    assert c["probes"] == [False, False, False, True, False, False, True]
+
+
+def test_pack_composite_errors(cases):
+    c = get(cases, "errors")
+    assert "not a bearing" in c["seat_not_bearing"]["cause"]
+    assert "rollers must be an int >= 3" in c["turntable_rollers"]["cause"]
+    assert "no room for the trough" in c["hollow_no_room"]["cause"]

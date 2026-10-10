@@ -47,13 +47,23 @@ The idler needs a coaxial pin or M3 screw fixed to the holder below the case: gi
 under the servo with a hole on the shaft axis. Do **not** declare the idler as a joint (no closed loops,
 D10); L5 checks the clearance.
 
+**Other composites (all in the frame of their connector; see docs/sdk.md)**
+- Yaw joint: `part.turntable_base("<yaw servo>", at=...)` in the base part; the turret is driven through the
+  horn (`mate_to` or `horn_coupler`) and its flat underside, at the horn face, rides on the rollers: make the
+  turret disc at least `2 × (roller_r + 3)` wide (≈ 100 mm with the defaults).
+- Thin links: `part.horn_coupler(servo, at=...)` gives a link narrower than the horn a hub; continue the link
+  with `part.link_bar` / `part.hollow_link` (open cable trough) on a datum frame at the joint.
+- Bearings: `part.bearing_seat("bearing/608zz", at=...)` (press fit) for an idler or a passive axle; the
+  connector is the seat floor, one bearing width below the entry face.
+
 **Rules of thumb**
 - Servo holders: the case drops into a pocket from the flange face; leave ≥ 3 mm wall around the pocket
   (`min_wall` of the profile is the floor, not the target).
 - Keep every horn-driven part off the servo case by ≥ 2 mm across the travel (U bracket `gap`, plate A
   above the case top); L5 fails above 1 mm³ overlap.
 - Yaw joint: turret on the base servo horn with `mate_to`; the turret holds the shoulder servo with its
-  shaft horizontal. A large turret disc (≥ 2× horn disc) spreads the tipping load onto the horn screws.
+  shaft horizontal. Prefer `turntable_base` under it (rollers take the tipping load); without it, a large
+  turret disc (≥ 2× horn disc) spreads the tipping load onto the horn screws.
 - Electronics bay in the base, opening (cable exit) toward the turret; the bay moves to the side of the
   base when the prompt asks, never onto a moving link in P1.
 - Exactly one `tool` connector, at the end of the last link (`tool0` in the URDF).

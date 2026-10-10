@@ -53,8 +53,9 @@ def part_excerpt(plan: AssemblyPlan, name: str) -> str:
         out += ["", "## Components seated on your connectors"]
         for c in seated:
             kind = load_card(c.card).get("kind", "")
-            call = ("part.electronics_bay(%r, at=%r)" if kind.startswith("electronics") else "part.mount(%r, at=%r)") \
-                % (c.id, _owner(c.attach_to)[1])
+            call = ("part.electronics_bay(%r, at=%r)" if kind.startswith("electronics")
+                    else "part.bearing_seat(%r, at=%r)" if kind.startswith("bearing")
+                    else "part.mount(%r, at=%r)") % (c.id, _owner(c.attach_to)[1])
             out.append("- `%s` = card `%s` (%s) at connector `%s` -> `%s`" % (c.id, c.card, kind, _owner(c.attach_to)[1], call))
     joints = [j for j in plan.joints if name in (_owner(j.parent)[0], _owner(j.child)[0])]
     if joints:
@@ -67,8 +68,9 @@ def part_excerpt(plan: AssemblyPlan, name: str) -> str:
             if _owner(j.child)[0] == name and p_owner in comps and p_conn == "horn":
                 srv = comps[p_owner]
                 line += ("\n  You are driven by servo `%s`'s horn: cut its interface with "
-                         "`part.mate_to(\"%s.horn\", at=%r)` or wrap it with `part.servo_u_bracket(%r, at=%r, ...)`."
-                         % (p_owner, p_owner, _owner(j.child)[1], p_owner, _owner(j.child)[1]))
+                         "`part.mate_to(\"%s.horn\", at=%r)`, give a thin link a hub with `part.horn_coupler(%r, at=%r)`, "
+                         "or wrap it with `part.servo_u_bracket(%r, at=%r, ...)`."
+                         % (p_owner, p_owner, _owner(j.child)[1], p_owner, _owner(j.child)[1], p_owner, _owner(j.child)[1]))
                 host = _owner(srv.attach_to)[0]
                 line += " The servo body is fixed to `%s`; stay clear of it across the joint range." % host
             out.append(line)

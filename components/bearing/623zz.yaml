@@ -1,0 +1,27 @@
+id: bearing/623zz
+kind: bearing.ball
+verified: true             # ISO 15 boundary dimensions; abutment diameters from the SKF 623-2Z table
+source: >-
+  Deep groove ball bearing 623-2Z / 623ZZ, ISO 15 dimension series 03 (miniature): d 3, D 10, B 4 mm.
+  Abutment (SKF catalogue, 623-2Z): shaft shoulder da min 4.2 mm, housing shoulder Da max 8.8 mm.
+  Mass approx. 1.6 g. Rides on an M3 screw as an axle (rollers of turntable_base).
+mass_kg: 0.0016
+
+# Card frame as bearing/608zz: seat face, +z through the bearing (z 0..width).
+params_mm:
+  bore_d: 3.0
+  outer_d: 10.0
+  width: 4.0
+  shaft_shoulder_d: 4.2
+  housing_shoulder_d: 8.8
+
+connectors:
+  seat: { o: [0, 0, 0], z: [0, 0, 1], x: [1, 0, 0], label: bearing_seat }
+  axis: { o: [0, 0, "width / 2"], z: [0, 0, 1], x: [1, 0, 0], label: bearing_axis }
+
+interfaces:
+  seat:   { outer_d: outer_d, depth: width, lip_d: housing_shoulder_d }
+  bore:   { d: bore_d, shoulder_d: shaft_shoulder_d }
+  volume: { centre_xy: [0, 0], size: [outer_d, outer_d, width], bottom_z: 0 }   # L5 envelope
+
+model: null
