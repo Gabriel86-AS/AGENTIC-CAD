@@ -1,8 +1,9 @@
 # Core-only bench prompts, P1 (phase file §5): no pack, no actuator; the core SDK and gates alone.
+# No actuator => no electronics ([]; the resolver adds the generic bay only for actuated designs, D39).
 # `spec` = the Spec the requirements agent should reach (checked by bench/runner.py; notes are not compared).
 - id: B1-6
   prompt: "A small 3D-printable box, about 80 x 60 x 40 mm, with a lid on a printed hinge that opens to about 110 degrees."
-  spec: { pack: null, dof: 1, components_requested: [], electronics: generic }
+  spec: { pack: null, dof: 1, components_requested: [], electronics: [] }
 - id: B1-7
   prompt: "A 3D-printable drawer that slides in a frame, about 100 mm wide, 120 mm deep and 50 mm tall, pulling out about 80 mm."
-  spec: { pack: null, dof: 1, components_requested: [], electronics: generic }
+  spec: { pack: null, dof: 1, components_requested: [], electronics: [] }

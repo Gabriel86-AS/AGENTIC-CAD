@@ -219,6 +219,10 @@ def test_check_assembly_reports_overlaps(parts):
     assert pairs["arm <-> s_yaw"].evidence["n_poses"] == 9
     # spline d 5.8 pokes 1 mm (spline_top - horn face) into the arm
     assert pairs["arm <-> s_yaw"].evidence["volume_mm3"] == pytest.approx(math.pi * 2.9 ** 2 * 1.0, rel=1e-3)
+    # located in each owner's part frame: a 5.8 x 5.8 x 1 mm box in the arm frame, also named in the cause
+    bb = pairs["arm <-> s_yaw"].evidence["bbox_mm"]["arm"]
+    assert [round(bb[3] - bb[0], 1), round(bb[4] - bb[1], 1), round(bb[5] - bb[2], 1)] == [5.8, 5.8, 1.0]
+    assert "in arm frame" in pairs["arm <-> s_yaw"].cause and "in s_yaw frame" in pairs["arm <-> s_yaw"].cause
 
 
 def test_allow_overlap_exempts_pair(parts):

@@ -1,0 +1,131 @@
+{
+  "run": "20261009_core_try1",
+  "config": "agent_sdk",
+  "date": "2026-10-09 22:42:08",
+  "description_checks": true,
+  "summary": {
+    "cases": 2,
+    "passed": 1,
+    "cost_usd": 1.2727,
+    "wall_s": 406.4,
+    "tokens_in": 383018,
+    "tokens_out": 44425,
+    "spec_match": 0,
+    "dof0_rate_mean": 1.0,
+    "pack": {
+      "passed": 0,
+      "ran": 0,
+      "need": "4/5"
+    },
+    "core": {
+      "passed": 1,
+      "ran": 2,
+      "need": "2/2"
+    },
+    "p1_exit_bench": false
+  },
+  "cases": [
+    {
+      "id": "B1-6",
+      "group": "core",
+      "pack": null,
+      "job_dir": "C:\\Users\\gabri\\OneDrive\\Desktop\\Code\\AgenticCAD\\jobs\\bench\\20261009_core_try1\\B1-6",
+      "status": "fail",
+      "reason": "part budget exhausted: ['base']",
+      "spec_match": {
+        "ok": false,
+        "diffs": [
+          "electronics: want 'generic', got []"
+        ]
+      },
+      "stages": {
+        "plan": true,
+        "part:base": true,
+        "part:lid": true,
+        "assembly": false
+      },
+      "failed_stage": "assembly",
+      "open_failure_gates": [
+        "?"
+      ],
+      "dof0_rate": 1.0,
+      "compiles": 7,
+      "compile_failures_by_gate": {
+        "L3": 2
+      },
+      "parts": {
+        "base": {
+          "sessions": 3,
+          "compiles": 3,
+          "escalations": 0,
+          "ok": true
+        },
+        "lid": {
+          "sessions": 2,
+          "compiles": 4,
+          "escalations": 0,
+          "ok": true
+        }
+      },
+      "rounds": 3,
+      "rollbacks": 0,
+      "tokens_in": 243782,
+      "tokens_out": 28760,
+      "cost_usd": 0.797861,
+      "sessions": 7,
+      "wall_s": 258.8
+    },
+    {
+      "id": "B1-7",
+      "group": "core",
+      "pack": null,
+      "job_dir": "C:\\Users\\gabri\\OneDrive\\Desktop\\Code\\AgenticCAD\\jobs\\bench\\20261009_core_try1\\B1-7",
+      "status": "pass",
+      "reason": "all P1 gates and D1/D2/D4 pass",
+      "spec_match": {
+        "ok": false,
+        "diffs": [
+          "electronics: want 'generic', got []"
+        ]
+      },
+      "stages": {
+        "plan": true,
+        "part:frame": true,
+        "part:drawer": true,
+        "assembly": true,
+        "print": true,
+        "build": true,
+        "export": true,
+        "description": true
+      },
+      "failed_stage": null,
+      "open_failure_gates": [],
+      "dof0_rate": 1.0,
+      "compiles": 4,
+      "compile_failures_by_gate": {
+        "sdk": 2
+      },
+      "parts": {
+        "frame": {
+          "sessions": 1,
+          "compiles": 2,
+          "escalations": 0,
+          "ok": true
+        },
+        "drawer": {
+          "sessions": 1,
+          "compiles": 2,
+          "escalations": 0,
+          "ok": true
+        }
+      },
+      "rounds": 1,
+      "rollbacks": 0,
+      "tokens_in": 139236,
+      "tokens_out": 15665,
+      "cost_usd": 0.474799,
+      "sessions": 4,
+      "wall_s": 147.6
+    }
+  ]
+}

@@ -7,7 +7,7 @@ sweep_assembly request:
     min_volume_mm3              overlap threshold (default 1.0)
   -> result = {tree, frames {owner: {conn: 4x4}}, mounts {component: conn},
                owners {owner: {volume_mm3, area_mm2, com_mm, inertia_mm5 (about the CoM, density 1), bbox}},
-               collisions [{pose, a, b, volume_mm3}], n_poses, n_checks}
+               collisions [{pose, a, b, volume_mm3, bbox {owner: [xmin, ymin, zmin, xmax, ymax, zmax] in its part frame}}], n_poses, n_checks}
      Signals: tree problems (gate L5). Interference is reported as data; validate/assembly_check.py
      turns it into signals.
     Owners are placed by our FK (D15), no Assembly WB solve: the residual gate in build_assembly already
@@ -56,6 +56,14 @@ def mass_props(shape):
     bb = shape.BoundBox
     return {"volume_mm3": vol, "area_mm2": sum(s.Area for s in solids), "com_mm": com, "inertia_mm5": inertia,
             "bbox": [bb.XMin, bb.YMin, bb.ZMin, bb.XMax, bb.YMax, bb.ZMax]}
+
+
+def _local_bbox(shape, world_tf):
+    """Bounding box of a world-placed shape in an owner's part frame (where the part agent writes geometry)."""
+    loc = shape.copy(False)
+    loc.Placement = O.to_placement(world_tf).inverse().multiply(loc.Placement)
+    b = loc.BoundBox
+    return [round(v, 2) for v in (b.XMin, b.YMin, b.ZMin, b.XMax, b.YMax, b.ZMax)]
 
 
 def rigid_groups(tree, owners):
@@ -127,9 +135,10 @@ def sweep_assembly(req, res):
             n_checks += 1
             if not placed[a].BoundBox.intersect(placed[b].BoundBox):
                 continue
-            v = placed[a].common(placed[b]).Volume
-            if v > min_vol:
-                collisions.append({"pose": i, "q": values, "a": a, "b": b, "volume_mm3": v})
+            inter = placed[a].common(placed[b])
+            if inter.Volume > min_vol:
+                collisions.append({"pose": i, "q": values, "a": a, "b": b, "volume_mm3": inter.Volume,
+                                   "bbox": {o: _local_bbox(inter, world[o]) for o in (a, b)}})
     res["result"].update({"owners": props, "collisions": collisions, "n_poses": len(poses), "n_checks": n_checks,
                           "groups": group})
     res["metrics"] = {"n_owners": len(shapes), "n_pairs": len(pairs), "n_checks": n_checks,

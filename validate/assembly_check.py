@@ -71,12 +71,16 @@ def _interference_signals(collisions):
     out = []
     for (a, b), c in sorted(worst.items(), key=lambda kv: -kv[1]["volume_mm3"]):
         at = "at rest" if c["pose"] == 0 else "at q = %s" % {k: round(v, 3) for k, v in c["q"].items()}
+        where = "; ".join("in %s frame x %.1f..%.1f, y %.1f..%.1f, z %.1f..%.1f" % ((o,) + tuple(bb[i] for i in (0, 3, 1, 4, 2, 5)))
+                          for o, bb in (c.get("bbox") or {}).items())
         out.append(Signal(level="failure", gate="L5", location="%s <-> %s" % (a, b),
-                          cause="%s and %s overlap by %.1f mm3 %s (%d of the sampled poses)" % (a, b, c["volume_mm3"], at, c["n"]),
+                          cause="%s and %s overlap by %.1f mm3 %s (%d of the sampled poses)%s"
+                                % (a, b, c["volume_mm3"], at, c["n"], ", " + where if where else ""),
                           action="clear the overlap: resize or recess the part that intrudes, narrow the joint limits, "
                                  "or list the pair in plan.allow_overlap if it is intended (press fit, cable)",
                           evidence={"volume_mm3": round(c["volume_mm3"], 3), "pose": c["pose"],
-                                    "q": {k: round(v, 4) for k, v in c["q"].items()}, "n_poses": c["n"]}))
+                                    "q": {k: round(v, 4) for k, v in c["q"].items()}, "n_poses": c["n"],
+                                    "bbox_mm": c.get("bbox") or {}}))
     return out
 
 
