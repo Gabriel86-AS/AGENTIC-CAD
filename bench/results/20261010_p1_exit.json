@@ -1,0 +1,408 @@
+{
+  "run": "20261010_p1_exit",
+  "config": "agent_sdk",
+  "date": "2026-10-10 10:18:50",
+  "description_checks": true,
+  "summary": {
+    "cases": 7,
+    "passed": 6,
+    "cost_usd": 3.8239,
+    "wall_s": 1029.3,
+    "tokens_in": 1274977,
+    "tokens_out": 111915,
+    "spec_match": 7,
+    "dof0_rate_mean": 1.0,
+    "pack": {
+      "passed": 4,
+      "ran": 5,
+      "need": "4/5"
+    },
+    "core": {
+      "passed": 2,
+      "ran": 2,
+      "need": "2/2"
+    },
+    "p1_exit_bench": true
+  },
+  "cases": [
+    {
+      "id": "B1-1",
+      "group": "pack",
+      "pack": "manipulator",
+      "job_dir": "C:\\Users\\gabri\\OneDrive\\Desktop\\Code\\AgenticCAD\\jobs\\bench\\20261010_p1_exit\\B1-1",
+      "status": "fail",
+      "reason": "part budget exhausted: ['cam_head', 'turret']",
+      "spec_match": {
+        "ok": true,
+        "diffs": []
+      },
+      "stages": {
+        "plan": true,
+        "part:base": true,
+        "part:turret": true,
+        "part:cam_head": true,
+        "assembly": false
+      },
+      "failed_stage": "assembly",
+      "open_failure_gates": [
+        "?"
+      ],
+      "dof0_rate": 1.0,
+      "compiles": 8,
+      "compile_failures_by_gate": {
+        "sdk": 1
+      },
+      "parts": {
+        "base": {
+          "sessions": 1,
+          "compiles": 2,
+          "escalations": 0,
+          "ok": true
+        },
+        "turret": {
+          "sessions": 3,
+          "compiles": 3,
+          "escalations": 0,
+          "ok": true
+        },
+        "cam_head": {
+          "sessions": 3,
+          "compiles": 3,
+          "escalations": 0,
+          "ok": true
+        }
+      },
+      "rounds": 3,
+      "rollbacks": 0,
+      "tokens_in": 284082,
+      "tokens_out": 25059,
+      "cost_usd": 0.797556,
+      "sessions": 9,
+      "wall_s": 201.5
+    },
+    {
+      "id": "B1-2",
+      "group": "pack",
+      "pack": "manipulator",
+      "job_dir": "C:\\Users\\gabri\\OneDrive\\Desktop\\Code\\AgenticCAD\\jobs\\bench\\20261010_p1_exit\\B1-2",
+      "status": "pass",
+      "reason": "all P1 gates and D1/D2/D4 pass",
+      "spec_match": {
+        "ok": true,
+        "diffs": []
+      },
+      "stages": {
+        "plan": true,
+        "part:base": true,
+        "part:upper_arm": true,
+        "part:forearm": true,
+        "assembly": true,
+        "print": true,
+        "build": true,
+        "export": true,
+        "description": true
+      },
+      "failed_stage": null,
+      "open_failure_gates": [],
+      "dof0_rate": 1.0,
+      "compiles": 7,
+      "compile_failures_by_gate": {
+        "sdk": 1
+      },
+      "parts": {
+        "base": {
+          "sessions": 2,
+          "compiles": 3,
+          "escalations": 0,
+          "ok": true
+        },
+        "upper_arm": {
+          "sessions": 3,
+          "compiles": 3,
+          "escalations": 0,
+          "ok": true
+        },
+        "forearm": {
+          "sessions": 1,
+          "compiles": 1,
+          "escalations": 0,
+          "ok": true
+        }
+      },
+      "rounds": 3,
+      "rollbacks": 0,
+      "tokens_in": 256303,
+      "tokens_out": 26237,
+      "cost_usd": 0.795967,
+      "sessions": 8,
+      "wall_s": 260.6
+    },
+    {
+      "id": "B1-3",
+      "group": "pack",
+      "pack": "manipulator",
+      "job_dir": "C:\\Users\\gabri\\OneDrive\\Desktop\\Code\\AgenticCAD\\jobs\\bench\\20261010_p1_exit\\B1-3",
+      "status": "pass",
+      "reason": "all P1 gates and D1/D2/D4 pass",
+      "spec_match": {
+        "ok": true,
+        "diffs": []
+      },
+      "stages": {
+        "plan": true,
+        "part:base": true,
+        "part:turret": true,
+        "part:arm": true,
+        "assembly": true,
+        "print": true,
+        "build": true,
+        "export": true,
+        "description": true
+      },
+      "failed_stage": null,
+      "open_failure_gates": [],
+      "dof0_rate": 1.0,
+      "compiles": 3,
+      "compile_failures_by_gate": {},
+      "parts": {
+        "base": {
+          "sessions": 1,
+          "compiles": 1,
+          "escalations": 0,
+          "ok": true
+        },
+        "turret": {
+          "sessions": 1,
+          "compiles": 1,
+          "escalations": 0,
+          "ok": true
+        },
+        "arm": {
+          "sessions": 1,
+          "compiles": 1,
+          "escalations": 0,
+          "ok": true
+        }
+      },
+      "rounds": 1,
+      "rollbacks": 0,
+      "tokens_in": 117770,
+      "tokens_out": 9081,
+      "cost_usd": 0.348821,
+      "sessions": 5,
+      "wall_s": 87.7
+    },
+    {
+      "id": "B1-4",
+      "group": "pack",
+      "pack": "manipulator",
+      "job_dir": "C:\\Users\\gabri\\OneDrive\\Desktop\\Code\\AgenticCAD\\jobs\\bench\\20261010_p1_exit\\B1-4",
+      "status": "pass",
+      "reason": "all P1 gates and D1/D2/D4 pass",
+      "spec_match": {
+        "ok": true,
+        "diffs": []
+      },
+      "stages": {
+        "plan": true,
+        "part:base": true,
+        "part:turret": true,
+        "part:arm": true,
+        "assembly": true,
+        "print": true,
+        "build": true,
+        "export": true,
+        "description": true
+      },
+      "failed_stage": null,
+      "open_failure_gates": [],
+      "dof0_rate": 1.0,
+      "compiles": 4,
+      "compile_failures_by_gate": {
+        "sdk": 1
+      },
+      "parts": {
+        "base": {
+          "sessions": 1,
+          "compiles": 2,
+          "escalations": 0,
+          "ok": true
+        },
+        "turret": {
+          "sessions": 1,
+          "compiles": 1,
+          "escalations": 0,
+          "ok": true
+        },
+        "arm": {
+          "sessions": 1,
+          "compiles": 1,
+          "escalations": 0,
+          "ok": true
+        }
+      },
+      "rounds": 1,
+      "rollbacks": 0,
+      "tokens_in": 130943,
+      "tokens_out": 10921,
+      "cost_usd": 0.390693,
+      "sessions": 5,
+      "wall_s": 106.0
+    },
+    {
+      "id": "B1-5",
+      "group": "pack",
+      "pack": "manipulator",
+      "job_dir": "C:\\Users\\gabri\\OneDrive\\Desktop\\Code\\AgenticCAD\\jobs\\bench\\20261010_p1_exit\\B1-5",
+      "status": "pass",
+      "reason": "all P1 gates and D1/D2/D4 pass",
+      "spec_match": {
+        "ok": true,
+        "diffs": []
+      },
+      "stages": {
+        "plan": true,
+        "part:base": true,
+        "part:turret": true,
+        "part:arm": true,
+        "assembly": true,
+        "print": true,
+        "build": true,
+        "export": true,
+        "description": true
+      },
+      "failed_stage": null,
+      "open_failure_gates": [],
+      "dof0_rate": 1.0,
+      "compiles": 3,
+      "compile_failures_by_gate": {},
+      "parts": {
+        "base": {
+          "sessions": 1,
+          "compiles": 1,
+          "escalations": 0,
+          "ok": true
+        },
+        "turret": {
+          "sessions": 1,
+          "compiles": 1,
+          "escalations": 0,
+          "ok": true
+        },
+        "arm": {
+          "sessions": 1,
+          "compiles": 1,
+          "escalations": 0,
+          "ok": true
+        }
+      },
+      "rounds": 1,
+      "rollbacks": 0,
+      "tokens_in": 133597,
+      "tokens_out": 9562,
+      "cost_usd": 0.503833,
+      "sessions": 5,
+      "wall_s": 98.7
+    },
+    {
+      "id": "B1-6",
+      "group": "core",
+      "pack": null,
+      "job_dir": "C:\\Users\\gabri\\OneDrive\\Desktop\\Code\\AgenticCAD\\jobs\\bench\\20261010_p1_exit\\B1-6",
+      "status": "pass",
+      "reason": "all P1 gates and D1/D2/D4 pass",
+      "spec_match": {
+        "ok": true,
+        "diffs": []
+      },
+      "stages": {
+        "plan": true,
+        "part:base": true,
+        "part:lid": true,
+        "assembly": true,
+        "print": true,
+        "build": true,
+        "export": true,
+        "description": true
+      },
+      "failed_stage": null,
+      "open_failure_gates": [],
+      "dof0_rate": 1.0,
+      "compiles": 7,
+      "compile_failures_by_gate": {
+        "sdk": 2
+      },
+      "parts": {
+        "base": {
+          "sessions": 2,
+          "compiles": 3,
+          "escalations": 0,
+          "ok": true
+        },
+        "lid": {
+          "sessions": 2,
+          "compiles": 4,
+          "escalations": 0,
+          "ok": true
+        }
+      },
+      "rounds": 2,
+      "rollbacks": 0,
+      "tokens_in": 215441,
+      "tokens_out": 18349,
+      "cost_usd": 0.594089,
+      "sessions": 6,
+      "wall_s": 166.4
+    },
+    {
+      "id": "B1-7",
+      "group": "core",
+      "pack": null,
+      "job_dir": "C:\\Users\\gabri\\OneDrive\\Desktop\\Code\\AgenticCAD\\jobs\\bench\\20261010_p1_exit\\B1-7",
+      "status": "pass",
+      "reason": "all P1 gates and D1/D2/D4 pass",
+      "spec_match": {
+        "ok": true,
+        "diffs": []
+      },
+      "stages": {
+        "plan": true,
+        "part:frame": true,
+        "part:drawer": true,
+        "assembly": true,
+        "print": true,
+        "build": true,
+        "export": true,
+        "description": true
+      },
+      "failed_stage": null,
+      "open_failure_gates": [],
+      "dof0_rate": 1.0,
+      "compiles": 5,
+      "compile_failures_by_gate": {
+        "sdk": 3
+      },
+      "parts": {
+        "frame": {
+          "sessions": 1,
+          "compiles": 2,
+          "escalations": 0,
+          "ok": true
+        },
+        "drawer": {
+          "sessions": 1,
+          "compiles": 3,
+          "escalations": 0,
+          "ok": true
+        }
+      },
+      "rounds": 1,
+      "rollbacks": 0,
+      "tokens_in": 136841,
+      "tokens_out": 12706,
+      "cost_usd": 0.392891,
+      "sessions": 4,
+      "wall_s": 108.4
+    }
+  ]
+}
