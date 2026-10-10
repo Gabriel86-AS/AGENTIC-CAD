@@ -259,6 +259,28 @@ def insert_counterbore():
     return run(part, {"m3_insert_hole_d": 4.2})
 
 
+@case
+def u_bracket():
+    """Pack composite: U bracket on the shoulder horn, idler plate under the case, bridge beyond the flange."""
+    sdk.configure(components={"s_shoulder": "servo/mg996r"})
+    try:
+        part = Part("ubracket_case")
+        part.connector("shoulder_horn", origin=(0, 0, 0), z=(0, 0, 1), x=(1, 0, 0), label="servo_horn_face")
+        u = part.servo_u_bracket("s_shoulder", at="shoulder_horn")
+        out = {"ret": {k: float(getattr(u, k)) for k in ("length", "width", "thick", "gap", "bridge_x", "plate_b_z", "mid_z")}}
+        # idler bore (axis, plate B), access hole (axis, plate A), plate B off axis, bridge, plate A bar, servo space
+        probes = [(0, 0, u.plate_b_z.value + 1), (0, 0, 4), (8, 0, u.plate_b_z.value + 1),
+                  (u.length.value + 2, 0, -20), (u.length.value - 2, 5, 4), (0, 0, -20)]
+        out.update(run(part, {"ubracket_s_shoulder_gap": 4, "s_shoulder_body_below": 30}))
+        part.set_param("ubracket_s_shoulder_gap", 2)
+        part.set_param("s_shoulder_body_below", 26)
+        part.doc.recompute()
+        out["probes"] = inside(part, *probes)
+        return out
+    finally:
+        sdk.configure()
+
+
 PROGRAM = '''
 import math
 from agenticcad import Part
@@ -301,6 +323,7 @@ def errors():
         "mate_no_horn": lambda: _with_conn("err_k").mate_to("servo/mg996r.output_shaft", at="conn"),
         "counterbore_tap": lambda: Part("err_l").hole("XY", at=(0, 0), fit="tap_m3", counterbore=True),
         "bay_not_electronics": lambda: _with_conn("err_m").electronics_bay("servo/mg996r", at="conn"),
+        "u_bracket_not_servo": lambda: _with_conn("err_n").servo_u_bracket("electronics/pca9685", at="conn"),
     }
     out = {}
     for k, fn in attempts.items():

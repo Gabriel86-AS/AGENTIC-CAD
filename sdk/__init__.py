@@ -26,3 +26,7 @@ from sdk.sketch import Sketch
 __all__ = ["Part", "Sketch", "Datum", "Q", "PlanParams", "SDKError", "configure", "context", "signal"]
 
 sys.modules.setdefault("agenticcad", sys.modules[__name__])
+
+import packs  # noqa: E402
+
+packs.load_composites()  # pack composites (e.g. part.servo_u_bracket) register on Part; the core names no pack

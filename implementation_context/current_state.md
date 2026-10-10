@@ -4,10 +4,10 @@
 updated: 2026-10-09
 plan_version: v0.4 (IMPLEMENTATION_PLAN.md)
 current_phase: P1
-current_phase_status: in_progress; T1.1-T1.8 done (P0 closed; O11 deferred to P5)
-next_action: T1.10 servo_u_bracket (pack composite, packs/manipulator/), then T1.12 golden B1-3 (plan.json + parts/*.py by hand through every gate + export), then T1.9 agents. Measure unverified card values when hardware is at hand (O12)
-code_written: harness/ (worker protocol + tests), spikes/run.py, spikes/s01-s10, spikes/drivers/s10.py, components/ (card.py with card expressions, build.py, cards: servo/mg996r (+ horn), electronics/generic_bay, esp32_devkit, pca9685, fastener/m3_screw, m3_insert; servo_mg996r generator), tests/test_components.py, llm/ (tools, backend, agent_sdk_backend, claude_api_backend), spikes/s11_llm.py, spikes/urdf_1joint/, tests/test_llm_permissions.py, schemas/ (plan, signal, profile, names, export → schemas/json/), profiles/ (generic_fdm, materials), tests/test_schemas.py, sdk/ (expr, sketch, part, errors), tests/test_sdk.py + tests/freecad/sdk_cases.py, docs/sdk.md, harness/ (lint L0, part_ops worker ops, tools compile_part/probe_part, feedback), tests/test_harness_tools.py, assembly/ (kinematics, writer, builder), tests/test_assembly.py + tests/freecad/assembly_reopen.py, assembly/owners.py, validate/ (poses, statics, masses, plan_check, sweep worker ops, assembly_check, printability), tests/test_validate.py, export/urdf.py, description/checks.py, tests/test_export.py (124 tests total)
-git: branch p0-env-spikes, commits 2ce73d4, 7ee20dd (P0 closure), 82da443 (T1.1-T1.3), 1800634 (D28 revised), 175e1e7 (T1.4), 978bae1 (T1.5), 7b1e938 (T1.6), T1.7 commit; not pushed
+current_phase_status: in_progress; T1.1-T1.8, T1.10 done (P0 closed; O11 deferred to P5)
+next_action: T1.12 golden B1-3 (plan.json + parts/*.py by hand through every gate + export), then T1.9 agents. Measure unverified card values when hardware is at hand (O12)
+code_written: harness/ (worker protocol + tests), spikes/run.py, spikes/s01-s10, spikes/drivers/s10.py, components/ (card.py with card expressions, build.py, cards: servo/mg996r (+ horn), electronics/generic_bay, esp32_devkit, pca9685, fastener/m3_screw, m3_insert; servo_mg996r generator), tests/test_components.py, llm/ (tools, backend, agent_sdk_backend, claude_api_backend), spikes/s11_llm.py, spikes/urdf_1joint/, tests/test_llm_permissions.py, schemas/ (plan, signal, profile, names, export → schemas/json/), profiles/ (generic_fdm, materials), tests/test_schemas.py, sdk/ (expr, sketch, part, errors), tests/test_sdk.py + tests/freecad/sdk_cases.py, docs/sdk.md, harness/ (lint L0, part_ops worker ops, tools compile_part/probe_part, feedback), tests/test_harness_tools.py, assembly/ (kinematics, writer, builder), tests/test_assembly.py + tests/freecad/assembly_reopen.py, assembly/owners.py, validate/ (poses, statics, masses, plan_check, sweep worker ops, assembly_check, printability), tests/test_validate.py, export/urdf.py, description/checks.py, tests/test_export.py, packs/ (loader; manipulator: composites.py servo_u_bracket, knowledge.md, bench.yaml B1-1..5), tests/test_packs.py (129 tests total)
+git: branch p0-env-spikes, commits 2ce73d4, 7ee20dd (P0 closure), 82da443 (T1.1-T1.3), 1800634 (D28 revised), 175e1e7 (T1.4), 978bae1 (T1.5), 7b1e938 (T1.6), 50cbd61 (T1.7), af2070c (T1.8), T1.10 commit; not pushed
 ```
 
 ## 1. How to use this directory (token-saving protocol)
@@ -64,7 +64,7 @@ flowchart LR
 | T1.7 | Validators L0–L3, L5, L6 (+plan), L7-basic | done: `validate/plan_check.py` (cards, tree, DOF, drivers, tool, reach, L6-plan rods 0.5 g/mm), worker ops `sweep_assembly` (interference + owner mass props) / `mesh_parts` (`validate/sweep.py`), `validate/assembly_check.py` (L5 overlap + reach, L6 printed masses), `validate/printability.py` (L7-basic); L0–L3 stay in harness/ |
 | T1.8 | Exporter + D1, D2, D4 | done: `export/urdf.py` (links = rigid groups, link frame = joint connector frame, printed-mass inertials, box/mesh collisions, tool0, ament package + `print/*.stl` mm), `description/checks.py` (D1 check_urdf + yourdfpy, D2 Pinocchio inertia/CRBA + gravity = −statics (7e-15 N·m), D4 `gz sdf -p`) in Docker |
 | T1.9 | Agents + rule router + budgets | todo |
-| T1.10 | Manipulator pack v0 | todo (next, with T1.8) |
+| T1.10 | Manipulator pack v0 | done: `packs/` loader (discovery, `meta`/`knowledge`/`bench`), `servo_u_bracket` (horn plate + idler plate under the case + bridge; default length clears the flange over ±90°), `knowledge.md` (requirement + connector notes), `bench.yaml` B1-1..5 with target Specs; reach check stays core (inert without `reach_mm`) |
 | T1.11 | Bench runner + B1-6, B1-7 | todo |
 | T1.12 | Golden B1-3 (no LLM) — first milestone | todo |
 
@@ -109,6 +109,7 @@ P0 leftovers: none blocking (O11 deferred to P5).
 | D34 | L5 interference: owners placed by our FK (no WB solve), OCCT `common` > 1 mm³ fails; rest + grid 9/joint decimated to ≤ 25 poses; pairs in one rigid group (attach / fixed) checked at rest only; `AssemblyPlan.allow_overlap` [(a, b)] exempts pairs. L7-basic: build volume by sorted extents, watertight via trimesh, min wall by inward ray cast per facet, fail if thin area > 1 mm² | T1.7 |
 | D36 | Exporter: fixed plan joints merge into rigid-group links (no URDF fixed joints except tool0); link named after its group root owner; URDF numbers written %.12g; cylindrical/ball not exported in P1 | T1.8 |
 | D35 | MG996R travel stays ±90° on the card (user 2026-10-09), although the datasheet says ~120°; verify on a sample (O12) | user |
+| D37 | Packs are discovered, never named by the core: `sdk/__init__` calls `packs.load_composites()` (imports every `packs/<id>/composites.py`, which registers methods on `Part`); pack `__init__.py` = metadata only (no FreeCAD), so the orchestrator reads knowledge/bench as data. Reach check stays in core gates | T1.10 |
 | D24 | Linux-side checks (check_urdf, `gz sdf -p`, pinocchio; later ROS 2 / Gazebo gates) run in Docker image `agenticcad-ros:jazzy` built from `docker/ros-tools/Dockerfile`; package dir mounted read-only. WSL Humble is a fallback (`AGENTICCAD_LINUX=wsl`) | T0.7 |
 
 ## 6. Open items / blockers

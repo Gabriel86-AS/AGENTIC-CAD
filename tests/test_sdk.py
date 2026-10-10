@@ -215,6 +215,7 @@ def test_errors_are_failure_signals(cases):
     assert "disc horns at: ['horn']" in c["mate_no_horn"]["cause"]
     assert "clearance fit" in c["counterbore_tap"]["cause"]
     assert "not an electronics card" in c["bay_not_electronics"]["cause"]
+    assert "not a servo" in c["u_bracket_not_servo"]["cause"]
 
 
 def test_mate_to_disc_horn(cases):
@@ -298,3 +299,25 @@ def test_insert_and_counterbore(cases):
     bolt = a(m3) * 10 + (a(scr["head_d"] + clr) - a(m3)) * (scr["head_h"] + clr / 2)
     assert vol(c) == pytest.approx(40 * 40 * 10 - a(ins["hole_d"]) * ins["hole_depth"] - bolt)
     assert vol(c, "m1") == pytest.approx(40 * 40 * 10 - a(4.2) * ins["hole_depth"] - bolt)
+
+
+def test_servo_u_bracket(cases):
+    """Manipulator pack composite: horn plate + idler plate + bridge, one solid, follows card and own params."""
+    c = get(cases, "u_bracket")
+    assert_sound(c)
+    p = load_card("servo/mg996r")["params_mm"]
+    horn_z = p["spline_top"] + p["horn_top_above_tip"] - p["horn_disc_t"]
+    L = round(math.hypot(p["flange_l"] / 2 - p["shaft_x"], p["body_w"] / 2) + 3, 2)
+    t, w = 5, 30
+
+    def bbox(gap, below):
+        return [-w / 2, -w / 2, -(horn_z + below + gap) - t, L + t, w / 2, t]
+
+    r = c["ret"]
+    assert (r["length"], r["width"], r["thick"], r["gap"]) == pytest.approx((L, w, t, 2))
+    assert r["plate_b_z"] == pytest.approx(-(horn_z + p["body_below"] + 2) - t)
+    assert c["m0"]["bbox"] == pytest.approx(bbox(2, p["body_below"]))
+    assert c["m1"]["bbox"] == pytest.approx(bbox(4, 30))       # gap and the card's case depth both drive plate B
+    assert c["report"]["n_solids"] == 1
+    assert c["probes"] == [False, False, True, True, True, False]
+    assert c["report"]["params"]["ubracket_s_shoulder_length"]["source"].startswith("sdk")

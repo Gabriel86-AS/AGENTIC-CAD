@@ -1,0 +1,17 @@
+# Manipulator pack bench prompts, P1 (phase file §5). `spec` = the Spec the requirements agent should reach
+# (checked by the bench runner, T1.11). Core-only prompts B1-6, B1-7 live with the runner, not in a pack.
+- id: B1-1
+  prompt: "Design a 2-DOF pan-tilt mount for a small camera (about 30 g), driven by two hobby servos."
+  spec: { pack: manipulator, dof: 2, payload_g: 30, components_requested: [servo/mg996r], electronics: generic }
+- id: B1-2
+  prompt: "A 2-DOF planar arm with a shoulder and an elbow joint on a fixed base, about 180 mm reach, 30 g payload."
+  spec: { pack: manipulator, dof: 2, reach_mm: 180, payload_g: 30, components_requested: [servo/mg996r], electronics: generic }
+- id: B1-3
+  prompt: "A 2-DOF arm with a base yaw joint and a shoulder joint, 150 mm reach, carrying 50 g."
+  spec: { pack: manipulator, dof: 2, reach_mm: 150, payload_g: 50, components_requested: [servo/mg996r], electronics: generic }
+- id: B1-4
+  prompt: "A 2-DOF arm with a base yaw joint and a shoulder joint, 150 mm reach, carrying 50 g. Put the electronics bay on the side of the base."
+  spec: { pack: manipulator, dof: 2, reach_mm: 150, payload_g: 50, components_requested: [servo/mg996r], electronics: generic, notes: "electronics bay on the side of the base" }
+- id: B1-5
+  prompt: "A 2-DOF arm with a base yaw joint and a shoulder joint, 150 mm reach, carrying 50 g, controlled by an ESP32 DevKit and a PCA9685 servo driver housed in the base."
+  spec: { pack: manipulator, dof: 2, reach_mm: 150, payload_g: 50, components_requested: [servo/mg996r], electronics: [electronics/esp32_devkit, electronics/pca9685] }
