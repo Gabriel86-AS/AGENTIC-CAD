@@ -317,7 +317,7 @@ class Part:
         f.Length = q.value
         f.setExpression("Length", q.expr)
         f.Reversed = bool(reverse)
-        f.Midplane = bool(symmetric)
+        f.SideType = "Symmetric" if symmetric else "One side"
         return f
 
     def pocket(self, sketch, depth=None, through=False, symmetric=False, reverse=False, name=None):
@@ -337,7 +337,7 @@ class Part:
             f.Length = q.value
             f.setExpression("Length", q.expr)
         f.Reversed = bool(reverse)
-        f.Midplane = bool(symmetric)
+        f.SideType = "Symmetric" if symmetric else "One side"
         return f
 
     def hole_d(self, d=None, fit="clearance", horizontal=False):

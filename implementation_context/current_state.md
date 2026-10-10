@@ -3,9 +3,9 @@
 ```yaml
 updated: 2026-10-10
 plan_version: v0.4 (IMPLEMENTATION_PLAN.md)
-current_phase: P1
-current_phase_status: in_progress; T1.1-T1.10, T1.12 done — first milestone met; agents pass live B1-4 and B1-2 (P0 closed; O11 deferred to P5)
-next_action: P1 exit — bench criterion MET (run 20261010_p1_exit: arm 4/5, core 2/2, DoF-0 rate 1.0, $3.82). Remaining: user's manual GUI param-edit check on 2 jobs (B1-4 arm.FCStd arm_len, B1-7 drawer.FCStd drawer_w), then close P1 and open P2. Watch: the CODE→DESIGN escalation (d7bac26) is offline-tested only; B1-1 rerun passed in round 1 without needing it
+current_phase: P2
+current_phase_status: not_started; P1 DONE 2026-10-10 (bench 6/7 + B1-1 rerun pass, manual GUI edit check passed)
+next_action: open P2 (read phase_2_3dof_validation_depth.md). Watch: the CODE→DESIGN escalation (D43) is offline-tested only; O13 (GUI unit-mismatch message on drawer open) is cosmetic
 code_written: harness/ (worker protocol + tests), spikes/run.py, spikes/s01-s10, spikes/drivers/s10.py, components/ (card.py with card expressions, build.py, cards: servo/mg996r (+ horn), electronics/generic_bay, esp32_devkit, pca9685, fastener/m3_screw, m3_insert; servo_mg996r generator), tests/test_components.py, llm/ (tools, backend, agent_sdk_backend, claude_api_backend), spikes/s11_llm.py, spikes/urdf_1joint/, tests/test_llm_permissions.py, schemas/ (plan, signal, profile, names, export → schemas/json/), profiles/ (generic_fdm, materials), tests/test_schemas.py, sdk/ (expr, sketch, part, errors), tests/test_sdk.py + tests/freecad/sdk_cases.py, docs/sdk.md, harness/ (lint L0, part_ops worker ops, tools compile_part/probe_part, feedback), tests/test_harness_tools.py, assembly/ (kinematics, writer, builder), tests/test_assembly.py + tests/freecad/assembly_reopen.py, assembly/owners.py, validate/ (poses, statics, masses, plan_check, sweep worker ops, assembly_check, printability), tests/test_validate.py, export/urdf.py, description/checks.py, tests/test_export.py, packs/ (loader; manipulator: composites.py servo_u_bracket, knowledge.md, bench.yaml B1-1..5), tests/test_packs.py, harness/pipeline.py (run_job: plan → parts → L5/L6 → L7 → build → export → D1/D2/D4), bench/golden/b1_3/ (plan.json + parts base/turret/arm), tests/test_golden.py + tests/freecad/golden_edit.py (132 tests total)
 git: branch p0-env-spikes, pushed to origin (GitHub auth works from 2026-10-10); latest dd350a7 + state commit
 ```
@@ -20,15 +20,15 @@ git: branch p0-env-spikes, pushed to origin (GitHub auth works from 2026-10-10);
 
 ```mermaid
 flowchart LR
-    P0["P0 env + spikes<br/>DONE"] --> P1["P1 2-DOF e2e<br/>IN PROGRESS"]:::cur --> P2["P2 3-DOF + validation"] --> P3["P3 wrist · gripper · ROS 2"] --> P4["P4 6-DOF · memory · edits"] --> P5["P5 product hardening"]
+    P0["P0 env + spikes<br/>DONE"] --> P1["P1 2-DOF e2e<br/>DONE"] --> P2["P2 3-DOF + validation"]:::cur --> P3["P3 wrist · gripper · ROS 2"] --> P4["P4 6-DOF · memory · edits"] --> P5["P5 product hardening"]
     classDef cur fill:#ffd54f,stroke:#e65100,color:#000
 ```
 
 | Phase | File | Status | Exit met |
 |---|---|---|---|
 | P0 | `phase_0_environment_and_spikes.md` | done | yes (O11 open) |
-| P1 | `phase_1_2dof_end_to_end.md` | in_progress | — |
-| P2 | `phase_2_3dof_validation_depth.md` | not_started | — |
+| P1 | `phase_1_2dof_end_to_end.md` | done | yes 2026-10-10 |
+| P2 | `phase_2_3dof_validation_depth.md` | next | — |
 | P3 | `phase_3_wrist_gripper_ros2.md` | not_started | — |
 | P4 | `phase_4_6dof_memory_edits.md` | not_started | — |
 | P5 | `phase_5_product_hardening.md` | not_started | — |
@@ -68,7 +68,7 @@ flowchart LR
 | T1.11 | Bench runner + B1-6, B1-7 | done: `bench/runner.py` + CLI `python -m bench run [--ids] [--run] [--reuse]` (jobs → `jobs/bench/<run>/<id>/`, metrics → `bench/results/<run>.json`: stage pass/fail, spec match, DoF-0 rate from `compiles.jsonl`, compiles/sessions per part, rounds, tokens, cost, wall), `bench/core.yaml` B1-6/B1-7 (target `electronics: []`), `docs/core_mechanisms.md` = design knowledge when no pack. Core try 1: B1-7 drawer PASS (1 round, $0.47); B1-6 hinged box FAIL (stop pads 0.2 mm above the rim into the lid, 1.9 mm³; base agent blind for 3 rounds) → L5 cause/evidence now carry the overlap bbox in each owner's part frame; reserved part names (body, params) rejected by the plan → B1-6 PASS (try 3). **P1 exit run 2026-10-10** (`bench/results/20261010_p1_exit.json`): B1-2..B1-7 PASS, B1-1 pan-tilt FAIL (cam_head/turret L5 overlap at tilt ±74.5° survived 3 CODE rounds) → D43; B1-1 rerun PASS in 1 round ($0.53) |
 | T1.12 | Golden B1-3 (no LLM) — first milestone | done: `bench/golden/b1_3` passes plan, L0–L3 ×3, L5 (26 poses, 0 overlaps, reach 155 mm), L6 (shoulder 0.10/0.54 N·m), L7, build, export, D1/D2/D4 in ~15 s via `harness/pipeline.run_job`; GUI-style edit (arm_len, turret sh_h) re-solves and moves tool0 exactly. Shoulder limits [−90°, +17°] keep the arm off the base. L7 caught a real defect on the way (yaw horn M2 tap 0.1 mm from the servo wall) |
 
-P0 leftovers: none blocking (O11 deferred to P5).
+P1 exit: user's manual GUI check 2026-10-10 PASS — B1-4 arm.FCStd arm_len 155→130 and B1-7 drawer.FCStd drawer_w 100→130 recompute with no errors; B1-4 assembly.FCStd picks up the arm edit. Follow-ups fixed: SDK pad/pocket + MG996R generator set `SideType` instead of deprecated `Midplane` (D44). P0 leftovers: none (O11 → P5).
 
 ## 5. Decision log (do not re-litigate)
 
@@ -116,6 +116,7 @@ P0 leftovers: none blocking (O11 deferred to P5).
 | D41 | Live runs avoid B1-3 for agent evaluation: the golden B1-3 is the worked example in the design and part prompts (leakage) | T1.9 |
 | D42 | Agent SDK system prompt always goes through `--system-prompt-file` (temp file per session): inline it broke the Windows 32k command-line limit (WinError 206, reported by the SDK as CLINotFoundError) once pack knowledge + 4 cards were in the design prompt | B1-5, 2026-10-10 |
 | D43 | A CODE route whose parts have spent `part_rounds` on an assembly/print failure becomes a design rollback while rollbacks remain (extends D40; the layout, e.g. joint limits vs a wall, is the problem) | B1-1, 2026-10-10 |
+| D44 | Pad/Pocket direction via `SideType` (`One side` / `Symmetric`), never `Midplane` (deprecated in FreeCAD 1.1, warns on every reopen) | user GUI check 2026-10-10 |
 | D24 | Linux-side checks (check_urdf, `gz sdf -p`, pinocchio; later ROS 2 / Gazebo gates) run in Docker image `agenticcad-ros:jazzy` built from `docker/ros-tools/Dockerfile`; package dir mounted read-only. WSL Humble is a fallback (`AGENTICCAD_LINUX=wsl`) | T0.7 |
 
 ## 6. Open items / blockers
@@ -124,6 +125,7 @@ P0 leftovers: none blocking (O11 deferred to P5).
 |---|---|---|
 | O11 | Live ClaudeAPIBackend run. **Deferred to P5** (user 2026-10-09): prototype and bench run on the Agent SDK + subscription (D4); the API backend stays offline-tested until productization | P5 |
 | O9 | Assembly WB `Gears`/`RackPinion` headless | P3 S12 |
+| O13 | Opening B1-7 drawer.FCStd in the GUI logs once `Unit mismatch in minus operation` for `Params.box_w - Params.wall * 2` (drawer#inner.Constraints); values are right, recompute is clean, headless open does not reproduce it. Suspect GUI restore order with alias-to-alias cells (`box_w = drawer_w`). Cosmetic; revisit if it shows on other parts | P2 (low) |
 | O12 | Datasheet pass 2026-10-09: ESP32 DevKitC (Espressif drawing) and PCA9685 (Adafruit fab print) now `verified: true`; M3 insert hole matches vendor charts. Still unverified: MG996R hole pitch, flange height, shaft offset, horn disc (no vendor drawing exists); travel kept ±90° (D35). Measure a sample when available | user (hardware) |
 
 ## 7. File map

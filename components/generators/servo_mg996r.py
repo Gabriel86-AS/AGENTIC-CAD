@@ -112,7 +112,7 @@ for k, (sx, sy) in enumerate(((1, 1), (-1, 1), (-1, -1), (1, -1))):
 holes = body.newObject("PartDesign::Pocket", "MountHoles")
 holes.Profile = holes_sk
 holes.Type = "ThroughAll"
-holes.Midplane = True
+holes.SideType = "Symmetric"
 
 top = datum_plane("CaseTop", "Params.case_above")
 spline_sk = sketch_on(top, "SplineSketch")
