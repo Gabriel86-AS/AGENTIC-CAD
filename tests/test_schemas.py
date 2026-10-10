@@ -83,6 +83,15 @@ def test_duplicate_owner_names():
         AssemblyPlan.model_validate(bad)
 
 
+@pytest.mark.parametrize("name", ["body", "params"])
+def test_reserved_part_name_rejected(name):
+    # the SDK refuses these part names, so the plan must too (B1-6 try 2: a part agent stuck on 'body')
+    bad = copy.deepcopy(PLAN)
+    bad["parts"][0]["name"] = name
+    with pytest.raises(ValidationError, match="reserved"):
+        AssemblyPlan.model_validate(bad)
+
+
 def test_unknown_field_rejected():
     bad = copy.deepcopy(PLAN)
     bad["parts"][0]["colour"] = "red"

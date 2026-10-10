@@ -9,7 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from schemas.names import name_error, split_ref
+from schemas.names import name_error, part_name_error, split_ref
 
 Vec3 = tuple[float, float, float]
 
@@ -20,6 +20,13 @@ class _Model(BaseModel):
 
 def _check_name(v: str) -> str:
     err = name_error(v)
+    if err:
+        raise ValueError(err)
+    return v
+
+
+def _check_part_name(v: str) -> str:
+    err = part_name_error(v)
     if err:
         raise ValueError(err)
     return v
@@ -98,7 +105,7 @@ class PartSpec(_Model):
     connectors: list[Connector] = Field(default_factory=list)
     bbox_mm: Vec3 | None = None     # rough intended size; L3 checks the built part within ±20 %
 
-    _name = field_validator("name")(_check_name)
+    _name = field_validator("name")(_check_part_name)
 
     @field_validator("connectors")
     @classmethod

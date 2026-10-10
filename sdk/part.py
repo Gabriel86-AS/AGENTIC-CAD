@@ -19,14 +19,14 @@ import FreeCAD as App
 
 from components.card import card_path, evaluate, is_expr, load_card
 from profiles import load_profile
-from schemas.names import name_error
+from schemas.names import RESERVED_PART_NAMES, name_error
 from sdk.errors import SDKError, signal
 from sdk.expr import Q, fmt, is_num, qmax
 from sdk.sketch import Sketch
 
 PLANES = ("XY", "XZ", "YZ")
 DIMENSIONAL = {"Distance", "DistanceX", "DistanceY", "Radius", "Diameter", "Angle"}
-RESERVED = {"params", "body"}
+RESERVED = RESERVED_PART_NAMES
 
 
 class _Context:

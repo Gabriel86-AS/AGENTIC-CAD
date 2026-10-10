@@ -17,6 +17,19 @@ UNIT_SYMBOLS = frozenset("""
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
+# Part names the SDK cannot use: they clash with the objects every part document holds
+# (the `Params` sheet, the PartDesign `Body`). Checked on the plan too, so the design agent never
+# hands a part agent a name it cannot build (B1-6 try 2).
+RESERVED_PART_NAMES = frozenset({"params", "body"})
+
+
+def part_name_error(name: str) -> str | None:
+    """name_error plus the reserved part names."""
+    err = name_error(name)
+    if err is None and name in RESERVED_PART_NAMES:
+        err = "part name %r is reserved (clashes with an object in every part document); pick another, e.g. %r" % (name, name + "_shell")
+    return err
+
 
 def name_error(name: str) -> str | None:
     """None if `name` is a valid param alias / part / connector / joint name, else the reason."""
