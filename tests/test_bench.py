@@ -1,7 +1,7 @@
 """T1.11 bench runner without an LLM: case discovery, spec matching, and one scripted case end to end."""
 import json
 
-from bench.runner import cases, run_bench, spec_match, summary
+from bench.runner import cases, run_bench, spec_match, summarize, summary
 from test_agents import scripted_backends
 
 
@@ -53,3 +53,11 @@ def test_summary_exit_criterion():
     assert summary(rows)["p1_exit_bench"] is True
     rows[-1]["status"] = "fail"
     assert summary(rows)["p1_exit_bench"] is False
+
+
+def test_summarize_reads_nested_open_failure_gates(tmp_path):
+    case = next(c for c in cases() if c["id"] == "B1-1")
+    (tmp_path / "result.json").write_text(json.dumps({"status": "fail", "open_failures": [
+        {"part": "cam_head", "feedback": [{"level": "failure", "gate": "L5", "cause": "overlap"}]},
+        {"gate": "L7", "cause": "wall"}]}))
+    assert summarize(case, tmp_path)["open_failure_gates"] == ["L5", "L7"]

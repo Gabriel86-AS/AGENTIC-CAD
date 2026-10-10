@@ -4,10 +4,10 @@
 updated: 2026-10-10
 plan_version: v0.4 (IMPLEMENTATION_PLAN.md)
 current_phase: P2
-current_phase_status: not_started; P1 DONE 2026-10-10 (bench 6/7 + B1-1 rerun pass, manual GUI edit check passed)
-next_action: open P2 (read phase_2_3dof_validation_depth.md). Watch: the CODE→DESIGN escalation (D43) is offline-tested only; O13 (GUI unit-mismatch message on drawer open) is cosmetic
-code_written: harness/ (worker protocol + tests), spikes/run.py, spikes/s01-s10, spikes/drivers/s10.py, components/ (card.py with card expressions, build.py, cards: servo/mg996r (+ horn), electronics/generic_bay, esp32_devkit, pca9685, fastener/m3_screw, m3_insert; servo_mg996r generator), tests/test_components.py, llm/ (tools, backend, agent_sdk_backend, claude_api_backend), spikes/s11_llm.py, spikes/urdf_1joint/, tests/test_llm_permissions.py, schemas/ (plan, signal, profile, names, export → schemas/json/), profiles/ (generic_fdm, materials), tests/test_schemas.py, sdk/ (expr, sketch, part, errors), tests/test_sdk.py + tests/freecad/sdk_cases.py, docs/sdk.md, harness/ (lint L0, part_ops worker ops, tools compile_part/probe_part, feedback), tests/test_harness_tools.py, assembly/ (kinematics, writer, builder), tests/test_assembly.py + tests/freecad/assembly_reopen.py, assembly/owners.py, validate/ (poses, statics, masses, plan_check, sweep worker ops, assembly_check, printability), tests/test_validate.py, export/urdf.py, description/checks.py, tests/test_export.py, packs/ (loader; manipulator: composites.py servo_u_bracket, knowledge.md, bench.yaml B1-1..5), tests/test_packs.py, harness/pipeline.py (run_job: plan → parts → L5/L6 → L7 → build → export → D1/D2/D4), bench/golden/b1_3/ (plan.json + parts base/turret/arm), tests/test_golden.py + tests/freecad/golden_edit.py (132 tests total)
-git: branch p0-env-spikes, pushed to origin (GitHub auth works from 2026-10-10); latest dd350a7 + state commit
+current_phase_status: in_progress; T2.1 started (P1 misuse fixes). P1 DONE 2026-10-10
+next_action: T2.1 SDK v1 calls (§3.6), then T2.2 L4 flex (uses them). Watch: the CODE→DESIGN escalation (D43) is offline-tested only; O13 (GUI unit-mismatch message on drawer open) is cosmetic
+code_written: harness/ (worker protocol + tests), spikes/run.py, spikes/s01-s10, spikes/drivers/s10.py, components/ (card.py with card expressions, build.py, cards: servo/mg996r (+ horn), electronics/generic_bay, esp32_devkit, pca9685, fastener/m3_screw, m3_insert; servo_mg996r generator), tests/test_components.py, llm/ (tools, backend, agent_sdk_backend, claude_api_backend), spikes/s11_llm.py, spikes/urdf_1joint/, tests/test_llm_permissions.py, schemas/ (plan, signal, profile, names, export → schemas/json/), profiles/ (generic_fdm, materials), tests/test_schemas.py, sdk/ (expr, sketch, part, errors), tests/test_sdk.py + tests/freecad/sdk_cases.py, docs/sdk.md, harness/ (lint L0, part_ops worker ops, tools compile_part/probe_part, feedback), tests/test_harness_tools.py, assembly/ (kinematics, writer, builder), tests/test_assembly.py + tests/freecad/assembly_reopen.py, assembly/owners.py, validate/ (poses, statics, masses, plan_check, sweep worker ops, assembly_check, printability), tests/test_validate.py, export/urdf.py, description/checks.py, tests/test_export.py, packs/ (loader; manipulator: composites.py servo_u_bracket, knowledge.md, bench.yaml B1-1..5), tests/test_packs.py, harness/pipeline.py (run_job: plan → parts → L5/L6 → L7 → build → export → D1/D2/D4), bench/golden/b1_3/ (plan.json + parts base/turret/arm), tests/test_golden.py + tests/freecad/golden_edit.py (158 tests total)
+git: branch p0-env-spikes, pushed to origin (GitHub auth works from 2026-10-10); latest 8ec7db1 + T2.1 commit
 ```
 
 ## 1. How to use this directory (token-saving protocol)
@@ -28,7 +28,7 @@ flowchart LR
 |---|---|---|---|
 | P0 | `phase_0_environment_and_spikes.md` | done | yes (O11 open) |
 | P1 | `phase_1_2dof_end_to_end.md` | done | yes 2026-10-10 |
-| P2 | `phase_2_3dof_validation_depth.md` | next | — |
+| P2 | `phase_2_3dof_validation_depth.md` | in_progress | — |
 | P3 | `phase_3_wrist_gripper_ros2.md` | not_started | — |
 | P4 | `phase_4_6dof_memory_edits.md` | not_started | — |
 | P5 | `phase_5_product_hardening.md` | not_started | — |
@@ -51,24 +51,23 @@ flowchart LR
 | LLM auth | Claude Code subscription login present; no `ANTHROPIC_API_KEY` (not needed before P5) | Agent SDK ok; API backend offline (O11, P5) |
 | pinocchio | no Windows wheel (`cmeel-assimp`) | → Docker image (D24) |
 
-## 4. Task board (current phase: P1)
+## 4. Task board (current phase: P2)
+
+P1 board (T1.1–T1.12, all done) is in git at 8ec7db1. P1 data mined 2026-10-10 (13 jobs, 126 compiles, 37 failed: sdk 28, L1 7, L3 2; DoF-0 1.0; assembly rounds lost only to L5 overlaps): top SDK misuse = redefining a plan param in `part.params` (13), reserved / non-snake part names (fixed in P1), unit-symbol names `w`/`t`/`bar` (5). Agents use only sketch/rect/pad/datum/connector/pocket/hole/mount; no raw FreeCAD, no fillet/chamfer/shell (SDK lacks them).
 
 | ID | Task | Status |
 |---|---|---|
-| T1.1 | `schemas/` + JSON schema export | done: `Spec`, `AssemblyPlan` (+ `Param` ranges, `Connector`, `Joint`, `Mimic`, `Derived`), `Signal`, `TraceEvent`, `PrintProfile`; `python -m schemas.export`; test fails if JSON is stale |
-| T1.2 | SDK core v0 + unit tests per call | done: `sdk/` (Part, params, datum, sketch rect/circle(s)/slot/polygon, pad, pocket, hole(fit), connector, mount, cable_channel, report, save); 16 cases in one worker run (~2 s); frame orientation param-bound (D28 revised); `mate_to` + `electronics_bay` moved to T1.4 |
-| T1.3 | `profiles/generic_fdm.yaml`, `materials.yaml` | done: `profiles/__init__.py` (`load_profile`, `hole_diameter`) |
-| T1.4 | Cards: ESP32 DevKit, PCA9685, M3 screw/insert (MG996R, generic bay exist) + MG996R horn interface; SDK `mate_to`, `electronics_bay` | done: 4 new cards + MG996R `horn` connector/interface; SDK `mate_to` (disc horn), `electronics_bay` (floor/walls/openings + standoffs), `mount` standoffs, `hole(fit="insert_m3", counterbore=)`; 22 SDK cases, all volumes exact |
-| T1.5 | Harness tools `compile_part`, `probe_part`, signal formatter | done: `harness/lint.py` (L0), worker ops `compile_part`/`probe_part` (`harness/part_ops.py`), `harness/tools.py` (+ plan-side L3: connector pose 0.01 mm, label, bbox ±20 %), `harness/feedback.py`; `PartWorkspace` exposes both tools |
-| T1.6 | Assembly builder | done: `assembly/kinematics.py` (pure-Python tree + FK, both Pythons), worker op `build_assembly` (`assembly/writer.py`), `assembly/builder.py` (card models rebuilt when stale); App::Link per owner, WB joints, preplace + residual gate per pose; reopen + param edit tested |
-| T1.7 | Validators L0–L3, L5, L6 (+plan), L7-basic | done: `validate/plan_check.py` (cards, tree, DOF, drivers, tool, reach, L6-plan rods 0.5 g/mm), worker ops `sweep_assembly` (interference + owner mass props) / `mesh_parts` (`validate/sweep.py`), `validate/assembly_check.py` (L5 overlap + reach, L6 printed masses), `validate/printability.py` (L7-basic); L0–L3 stay in harness/ |
-| T1.8 | Exporter + D1, D2, D4 | done: `export/urdf.py` (links = rigid groups, link frame = joint connector frame, printed-mass inertials, box/mesh collisions, tool0, ament package + `print/*.stl` mm), `description/checks.py` (D1 check_urdf + yourdfpy, D2 Pinocchio inertia/CRBA + gravity = −statics (7e-15 N·m), D4 `gz sdf -p`) in Docker |
-| T1.9 | Agents + rule router + budgets | code done + offline-tested: `agents/` (stages: requirements `submit_spec`, deterministic resolver, design `check_plan`/`submit_plan`, part agents on `PartWorkspace` with K=5 compiles + one Opus escalation; `router.py` table; `job.py` orchestration + checkpoint + budgets; `trace.py` tokens/cost; CLI `python -m agents run "<prompt>" [--yes]`). `tests/test_agents.py` replays the golden through a scripted backend incl. a CODE repair round. **Live (Agent SDK, 2026-10-09):** B1-4 PASS in 1 round (5 sessions, $0.52 API-equiv., 102 s; every part 1 compile); B1-2 planar shoulder+elbow PASS in 3 rounds (8 sessions, $0.80, 287 s; L5 servo/link overlaps routed CODE → fixed by the part agents, no escalation, no rollback). Jobs in `jobs/` (gitignored) |
-| T1.10 | Manipulator pack v0 | done: `packs/` loader (discovery, `meta`/`knowledge`/`bench`), `servo_u_bracket` (horn plate + idler plate under the case + bridge; default length clears the flange over ±90°), `knowledge.md` (requirement + connector notes), `bench.yaml` B1-1..5 with target Specs; reach check stays core (inert without `reach_mm`) |
-| T1.11 | Bench runner + B1-6, B1-7 | done: `bench/runner.py` + CLI `python -m bench run [--ids] [--run] [--reuse]` (jobs → `jobs/bench/<run>/<id>/`, metrics → `bench/results/<run>.json`: stage pass/fail, spec match, DoF-0 rate from `compiles.jsonl`, compiles/sessions per part, rounds, tokens, cost, wall), `bench/core.yaml` B1-6/B1-7 (target `electronics: []`), `docs/core_mechanisms.md` = design knowledge when no pack. Core try 1: B1-7 drawer PASS (1 round, $0.47); B1-6 hinged box FAIL (stop pads 0.2 mm above the rim into the lid, 1.9 mm³; base agent blind for 3 rounds) → L5 cause/evidence now carry the overlap bbox in each owner's part frame; reserved part names (body, params) rejected by the plan → B1-6 PASS (try 3). **P1 exit run 2026-10-10** (`bench/results/20261010_p1_exit.json`): B1-2..B1-7 PASS, B1-1 pan-tilt FAIL (cam_head/turret L5 overlap at tilt ±74.5° survived 3 CODE rounds) → D43; B1-1 rerun PASS in 1 round ($0.53) |
-| T1.12 | Golden B1-3 (no LLM) — first milestone | done: `bench/golden/b1_3` passes plan, L0–L3 ×3, L5 (26 poses, 0 overlaps, reach 155 mm), L6 (shoulder 0.10/0.54 N·m), L7, build, export, D1/D2/D4 in ~15 s via `harness/pipeline.run_job`; GUI-style edit (arm_len, turret sh_h) re-solves and moves tool0 exactly. Shoulder limits [−90°, +17°] keep the arm off the base. L7 caught a real defect on the way (yaw horn M2 tap 0.1 mm from the servo wall) |
-
-P1 exit: user's manual GUI check 2026-10-10 PASS — B1-4 arm.FCStd arm_len 155→130 and B1-7 drawer.FCStd drawer_w 100→130 recompute with no errors; B1-4 assembly.FCStd picks up the arm edit. Follow-ups fixed: SDK pad/pocket + MG996R generator set `SideType` instead of deprecated `Midplane` (D44). P0 leftovers: none (O11 → P5).
+| T2.1 | SDK v1 + tests; fix top P1 misuse | in progress: `params(x=P.x)` re-exports the plan param; other redefinitions say "read it as P.x"; docs/sdk.md lists `w`/`t`/`bar`. Bench `open_failure_gates` now reads nested feedback (was `?`). Next: §3.6 calls (fillet/chamfer by feature tag, boss, rib, shell, mirror, patterns, bearing_seat, horn_coupler, turntable_base, link_bar, hollow_link, split) |
+| T2.2 | L4 flex test | — |
+| T2.3 | L5 sweep + `run_tests` helpers | — (top failing assembly gate in P1) |
+| T2.4 | L7-full | — |
+| T2.5 | Renderer + `render_part`; L3v | — |
+| T2.6 | L8 review | — |
+| T2.7 | Router v2, escalation, budgets | — |
+| T2.8 | Mechanisms pack v0 | — |
+| T2.9 | 3-DOF golden | — |
+| T2.10 | Bench v1 + 3 configs | — |
+| T2.11 | Recalibrate plan-level L6 densities | — |
 
 ## 5. Decision log (do not re-litigate)
 

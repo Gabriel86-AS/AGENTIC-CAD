@@ -25,7 +25,9 @@ def build(P):
 - Arithmetic on params: `p.length / 2`, `p.width + 3`, `-p.x` (multiply/divide by plain numbers only).
 - Every sketch is fully constrained after each call; otherwise `SDKError` (gate L2) at build time.
 - Names (part, params, sketches, datums, connectors) are `lower_snake_case` and not a unit
-  symbol (`h`, `m`, `s`, `g`, `deg` ... are rejected).
+  symbol (`h`, `m`, `s`, `g`, `t`, `w`, `bar`, `deg` ... are rejected): prefer `height`, `width`, `thick`.
+- Plan params are already in the sheet: use `P.name` directly. `part.params(name=P.name)` just
+  re-exports it; any other value under a plan param's name is rejected.
 - Sketches attach to origin planes or datums, never to faces.
 
 ## Frames

@@ -158,6 +158,9 @@ class Part:
         if err:
             raise SDKError("sdk", "param " + err, action="rename the param")
         if alias in self.params_info:
+            if self.params_info[alias]["source"] == "plan":
+                raise SDKError("sdk", "param %r is a plan param; read it as P.%s instead of redefining it" % (alias, alias),
+                               action="use P.%s directly, or give the part-local value another name" % alias)
             raise SDKError("sdk", "param %r already defined (%s)" % (alias, self.params_info[alias]["source"]),
                            action="use a different name")
         row = len(self.params_info) + 2
@@ -209,6 +212,9 @@ class Part:
                 out[alias] = self._add_param(alias, v["value"], v.get("unit", "mm"), v.get("min"), v.get("max"), "part")
             elif isinstance(v, Q):
                 self._ensure_plan(v)
+                if alias in v.plan and v.expr == "Params." + alias:  # name=P.name: the plan param itself
+                    out[alias] = v
+                    continue
                 out[alias] = self._add_param(alias, v, v.unit, source="part")
             elif is_num(v):
                 out[alias] = self._add_param(alias, v, source="part")

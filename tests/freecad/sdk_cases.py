@@ -51,9 +51,11 @@ def params():
     sdk.configure()
     P = PlanParams({"plan_w": {"value": 60, "min": 40, "max": 80, "unit": "mm"}})
     part = Part("params_case")
-    p = part.params(width=P.plan_w, thick=5, depth={"value": 30, "min": 20, "max": 40})
+    p = part.params(width=P.plan_w, thick=5, depth={"value": 30, "min": 20, "max": 40}, plan_w=P.plan_w)
     part.pad(part.sketch("base", on="XY").rect(p.width, p.depth), p.thick)
-    return run(part, {"plan_w": 70})
+    out = run(part, {"plan_w": 70})
+    out["self_alias_expr"] = p.plan_w.expr
+    return out
 
 
 @case
@@ -307,11 +309,18 @@ def program():
     return out
 
 
+def _plan_redefined():
+    part = Part("err_o")
+    part.params(span=PlanParams({"plate_len": {"value": 50, "min": 40, "max": 60}}).plate_len)
+    part.params(plate_len=60)
+
+
 @case
 def errors():
     attempts = {
         "zero_width": lambda: Part("err_a").sketch("sk").rect(0, 5),
         "unit_alias": lambda: Part("err_b").params(h=5),
+        "plan_redefined": lambda: _plan_redefined(),
         "bad_plane": lambda: Part("err_c").sketch("sk", on="top_face"),
         "pocket_args": lambda: _pocket_both(),
         "unknown_fit": lambda: Part("err_e").hole("XY", at=(0, 0), d=3, fit="loose"),

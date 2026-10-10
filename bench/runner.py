@@ -74,7 +74,8 @@ def summarize(case: dict, job_dir: Path) -> dict:
         "spec_match": spec_match(case.get("spec") or {}, _json(job_dir / "spec.json"), _json(job_dir / "bom.json")),
         "stages": {k: v.get("ok") for k, v in (rep.get("stages") or {}).items()},
         "failed_stage": rep.get("failed_stage"),
-        "open_failure_gates": sorted({f.get("gate", "?") for f in res.get("open_failures") or [] if isinstance(f, dict)}),
+        "open_failure_gates": sorted({s.get("gate", "?") for f in res.get("open_failures") or [] if isinstance(f, dict)
+                                      for s in f.get("feedback") or [f] if isinstance(s, dict)}),
         "dof0_rate": round(sum(c["n_dof0"] for c in compiles) / n_sk, 4) if n_sk else None,
         "compiles": len(compiles), "compile_failures_by_gate": _count(g for c in compiles for g in c["gates"]),
         "parts": res.get("parts") or {},

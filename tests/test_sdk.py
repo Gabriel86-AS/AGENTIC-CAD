@@ -52,6 +52,7 @@ def test_params_plan_binding(cases):
     assert params["depth"]["min"] == 20 and params["width"]["current"] == pytest.approx(60)
     assert vol(c) == pytest.approx(60 * 30 * 5)
     assert vol(c, "m1") == pytest.approx(70 * 30 * 5)  # plan param -> part param -> sketch
+    assert c["self_alias_expr"] == "Params.plan_w"  # params(plan_w=P.plan_w) re-exports, no redefinition
 
 
 def test_datum_offsets_and_frames(cases):
@@ -209,6 +210,7 @@ def test_errors_are_failure_signals(cases):
         assert sig is not None, f"{k}: expected SDKError"
         assert sig["level"] == "failure" and sig["cause"], (k, sig)
     assert "unit symbol" in c["unit_alias"]["cause"]
+    assert "read it as P.plate_len" in c["plan_redefined"]["cause"]
     assert "s_missing" in c["unknown_component"]["cause"]
     assert "not orthogonal" in c["not_orthogonal"]["cause"]
     assert "host thickness" in c["slotted_no_host"]["cause"]
