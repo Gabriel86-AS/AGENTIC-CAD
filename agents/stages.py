@@ -5,6 +5,7 @@ submit_plan validate before anything is stored; part agents write only parts/<ow
 `Backends` maps a role to a backend (model routing, plan §2.3); tests inject scripted backends.
 """
 import json
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -26,6 +27,7 @@ ROOT = Path(__file__).resolve().parents[1]
 Backends = Callable[[str], LLMBackend]   # role: "requirements" | "design" | "part" | "part_escalated"
 DEFAULT_GENERIC_BAY = "electronics/generic_bay"
 DEFAULT_SERVO = "servo/mg996r"
+_COMPILE_LOG = threading.Lock()   # parallel part agents append to one compiles.jsonl
 
 
 def _errors(e: ValidationError) -> list[str]:
@@ -197,6 +199,11 @@ def part_agent(plan: AssemblyPlan, name: str, job_dir: Path, backends: Backends,
         out.sessions += 1
         out.compiles += ws.compiles
         out.runs.append(res)
+        with _COMPILE_LOG, (job_dir / "compiles.jsonl").open("a", encoding="utf-8") as f:   # bench metrics (DoF-0 rate)
+            for e in ws.log:
+                if e["tool"] == "compile_part" and e["outcome"] != "denied":
+                    f.write(json.dumps({"part": name, "role": role, "ok": e["outcome"] == "ok", "gates": e["gates"],
+                                        "n_sketches": e["n_sketches"], "n_dof0": e["n_dof0"]}) + "\n")
         out.escalated = role != "part"
         final = harness_tools.compile_part(ws.own, ws.io, out=ws.fcstd, part=name, plan=plan) if ws.own.exists() else None
         out.ok = bool(final and final.ok)

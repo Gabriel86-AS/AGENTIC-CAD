@@ -47,7 +47,7 @@ one-line summary."""
 
 
 def design_system(pack: str | None, cards: list[str]) -> str:
-    knowledge = packs.knowledge(pack) if pack else ""
+    knowledge = packs.knowledge(pack) if pack else _read(ROOT / "docs" / "core_mechanisms.md")
     card_text = "\n\n".join("### `%s`\n```yaml\n%s```" % (c, _read(card_path(c))) for c in cards)
     golden_parts = "\n\n".join("#### parts/%s\n```python\n%s```" % (p.name, _read(p))
                                for p in sorted((GOLDEN / "parts").glob("*.py")))

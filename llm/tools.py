@@ -101,6 +101,9 @@ class PartWorkspace:
                                          timeout_s=self.timeout_s)
         self.last_compile_ok = res.ok
         self._record("compile_part", args, "ok" if res.ok else "failure")
+        sk = (res.report or {}).get("sketches") or {}
+        self.log[-1].update(gates=sorted({s.gate for s in res.signals if s.level == "failure"}),
+                            n_sketches=len(sk), n_dof0=sum(1 for s in sk.values() if s.get("dof") == 0))
         out = res.for_agent()
         if self.max_compiles is not None:
             out["compiles_left"] = self.max_compiles - self.compiles
