@@ -1,5 +1,37 @@
 {
   "$defs": {
+    "AllowOverlap": {
+      "additionalProperties": false,
+      "description": "Exempt the pair from L5 interference (press fit, seated component, cable); the reason is required.",
+      "properties": {
+        "expect": {
+          "const": "allow_overlap",
+          "title": "Expect",
+          "type": "string"
+        },
+        "a": {
+          "title": "A",
+          "type": "string"
+        },
+        "b": {
+          "title": "B",
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 3,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "expect",
+        "a",
+        "b",
+        "reason"
+      ],
+      "title": "AllowOverlap",
+      "type": "object"
+    },
     "ComponentUse": {
       "additionalProperties": false,
       "description": "A purchased part placed in the assembly: card instance fixed to a part connector.",
@@ -143,6 +175,150 @@
         "op"
       ],
       "title": "Derived",
+      "type": "object"
+    },
+    "ExpectClearance": {
+      "additionalProperties": false,
+      "description": "Owners a and b keep >= min_mm apart: over `samples` values of over_joint (others at rest), or over the\nwhole L5 sweep when over_joint is omitted.",
+      "properties": {
+        "expect": {
+          "const": "clearance",
+          "title": "Expect",
+          "type": "string"
+        },
+        "a": {
+          "title": "A",
+          "type": "string"
+        },
+        "b": {
+          "title": "B",
+          "type": "string"
+        },
+        "min_mm": {
+          "default": 1.0,
+          "exclusiveMinimum": 0,
+          "title": "Min Mm",
+          "type": "number"
+        },
+        "over_joint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Over Joint"
+        },
+        "samples": {
+          "default": 9,
+          "maximum": 25,
+          "minimum": 2,
+          "title": "Samples",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "expect",
+        "a",
+        "b"
+      ],
+      "title": "ExpectClearance",
+      "type": "object"
+    },
+    "ExpectContact": {
+      "additionalProperties": false,
+      "description": "At rest, owners a and b touch: closest distance <= tol_mm (an overlap counts as contact). With near =\n\"<owner>.<connector>\", a's material within radius_mm of that connector's origin must touch b.",
+      "properties": {
+        "expect": {
+          "const": "contact",
+          "title": "Expect",
+          "type": "string"
+        },
+        "a": {
+          "title": "A",
+          "type": "string"
+        },
+        "b": {
+          "title": "B",
+          "type": "string"
+        },
+        "tol_mm": {
+          "default": 0.5,
+          "minimum": 0,
+          "title": "Tol Mm",
+          "type": "number"
+        },
+        "near": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Near"
+        },
+        "radius_mm": {
+          "default": 15.0,
+          "exclusiveMinimum": 0,
+          "title": "Radius Mm",
+          "type": "number"
+        }
+      },
+      "required": [
+        "expect",
+        "a",
+        "b"
+      ],
+      "title": "ExpectContact",
+      "type": "object"
+    },
+    "ExpectReach": {
+      "additionalProperties": false,
+      "description": "Reach of `tool` (\"<owner>.<connector>\", default: the plan's tool connector) compared with value_mm.",
+      "properties": {
+        "expect": {
+          "const": "reach",
+          "title": "Expect",
+          "type": "string"
+        },
+        "op": {
+          "default": ">=",
+          "enum": [
+            ">=",
+            "<="
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "value_mm": {
+          "exclusiveMinimum": 0,
+          "title": "Value Mm",
+          "type": "number"
+        },
+        "tool": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool"
+        }
+      },
+      "required": [
+        "expect",
+        "value_mm"
+      ],
+      "title": "ExpectReach",
       "type": "object"
     },
     "Joint": {
@@ -558,6 +734,35 @@
         "type": "array"
       },
       "title": "Allow Overlap",
+      "type": "array"
+    },
+    "tests": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "allow_overlap": "#/$defs/AllowOverlap",
+            "clearance": "#/$defs/ExpectClearance",
+            "contact": "#/$defs/ExpectContact",
+            "reach": "#/$defs/ExpectReach"
+          },
+          "propertyName": "expect"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/ExpectContact"
+          },
+          {
+            "$ref": "#/$defs/ExpectClearance"
+          },
+          {
+            "$ref": "#/$defs/ExpectReach"
+          },
+          {
+            "$ref": "#/$defs/AllowOverlap"
+          }
+        ]
+      },
+      "title": "Tests",
       "type": "array"
     }
   },

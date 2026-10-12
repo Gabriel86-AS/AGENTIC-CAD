@@ -5,7 +5,7 @@ connectors, tree, DOF, reach, torque) belong to the plan validator, which return
 design agent can act on instead of raising.
 """
 import math
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -184,6 +184,73 @@ class Derived(_Model):
     _name = field_validator("name")(_check_name)
 
 
+def _check_owner(v: str) -> str:
+    if "." in v:
+        raise ValueError(f"{v!r}: name an owner (part or component id), not a connector")
+    return v
+
+
+class ExpectContact(_Model):
+    """At rest, owners a and b touch: closest distance <= tol_mm (an overlap counts as contact). With near =
+    "<owner>.<connector>", a's material within radius_mm of that connector's origin must touch b."""
+    expect: Literal["contact"]
+    a: str
+    b: str
+    tol_mm: float = Field(default=0.5, ge=0)
+    near: str | None = None
+    radius_mm: float = Field(default=15.0, gt=0)
+
+    _owners = field_validator("a", "b")(_check_owner)
+
+    @field_validator("near")
+    @classmethod
+    def _near(cls, v):
+        if v is not None:
+            split_ref(v)
+        return v
+
+
+class ExpectClearance(_Model):
+    """Owners a and b keep >= min_mm apart: over `samples` values of over_joint (others at rest), or over the
+    whole L5 sweep when over_joint is omitted."""
+    expect: Literal["clearance"]
+    a: str
+    b: str
+    min_mm: float = Field(default=1.0, gt=0)
+    over_joint: str | None = None
+    samples: int = Field(default=9, ge=2, le=25)
+
+    _owners = field_validator("a", "b")(_check_owner)
+
+
+class ExpectReach(_Model):
+    """Reach of `tool` ("<owner>.<connector>", default: the plan's tool connector) compared with value_mm."""
+    expect: Literal["reach"]
+    op: Literal[">=", "<="] = ">="
+    value_mm: float = Field(gt=0)
+    tool: str | None = None
+
+    @field_validator("tool")
+    @classmethod
+    def _tool(cls, v):
+        if v is not None:
+            split_ref(v)
+        return v
+
+
+class AllowOverlap(_Model):
+    """Exempt the pair from L5 interference (press fit, seated component, cable); the reason is required."""
+    expect: Literal["allow_overlap"]
+    a: str
+    b: str
+    reason: str = Field(min_length=3)
+
+    _owners = field_validator("a", "b")(_check_owner)
+
+
+AssemblyTest = Annotated[ExpectContact | ExpectClearance | ExpectReach | AllowOverlap, Field(discriminator="expect")]
+
+
 class AssemblyPlan(_Model):
     units: Literal["mm"] = "mm"
     ground: str
@@ -195,6 +262,7 @@ class AssemblyPlan(_Model):
     derived: list[Derived] = Field(default_factory=list)
     dof: int = Field(ge=0)
     allow_overlap: list[tuple[str, str]] = Field(default_factory=list)  # owner pairs exempt from L5 interference
+    tests: list[AssemblyTest] = Field(default_factory=list)            # authored L5 tests (run_tests, P2 §3.2)
 
     @field_validator("params")
     @classmethod
@@ -214,6 +282,10 @@ class AssemblyPlan(_Model):
         if dup:
             raise ValueError(f"duplicate joint names: {sorted(dup)}")
         return self
+
+    def overlap_pairs(self) -> list[tuple[str, str]]:
+        """allow_overlap pairs plus the authored allow_overlap tests."""
+        return list(self.allow_overlap) + [(t.a, t.b) for t in self.tests if t.expect == "allow_overlap"]
 
     def part(self, name: str) -> PartSpec | None:
         return next((p for p in self.parts if p.name == name), None)

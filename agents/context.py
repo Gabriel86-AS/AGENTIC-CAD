@@ -74,6 +74,16 @@ def part_excerpt(plan: AssemblyPlan, name: str) -> str:
                 host = _owner(srv.attach_to)[0]
                 line += " The servo body is fixed to `%s`; stay clear of it across the joint range." % host
             out.append(line)
+    tests = [t for t in plan.tests if t.expect in ("contact", "clearance") and name in (t.a, t.b)]
+    if tests:
+        out += ["", "## Assembly tests on your part (checked once every part compiles)"]
+        for t in tests:
+            other = t.b if t.a == name else t.a
+            if t.expect == "contact":
+                out.append("- touch `%s` at rest (gap <= %g mm)%s" % (other, t.tol_mm, " near `%s`" % t.near if t.near else ""))
+            else:
+                over = "over `%s`" % t.over_joint if t.over_joint else "over every joint"
+                out.append("- stay >= %g mm from `%s` %s" % (t.min_mm, other, over))
     others = [p for p in plan.parts if p.name != name]
     if others:
         out += ["", "## Neighbours (other agents build these; do not model them)"]

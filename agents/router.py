@@ -5,8 +5,9 @@ the plan), from a fixed table. P2 wraps this table with an LLM classifier for am
     plan                                       DESIGN
     part:<name> (L0-L4)                        CODE <name>
     L4 flex: one plan param fails in >= 2 parts DESIGN (its range conflicts across parts, P2 §3.1)
-    assembly L5 overlap "a <-> b"              CODE for the plan parts among a, b (DESIGN if neither is a part)
-    assembly L5 reach, tree; L6 torque         DESIGN
+    assembly L5 overlap / contact / clearance "a <-> b"
+                                               CODE for the plan parts among a, b (DESIGN if neither is a part)
+    assembly L5 reach (spec or plan.tests), tree; L6 torque   DESIGN
     print L7 build volume                      DESIGN (split or shorten the part)
     print L7 other (watertight, thin wall)     CODE <part>
     build / export / description               STOP (pipeline defect, not the agents')

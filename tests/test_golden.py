@@ -25,7 +25,10 @@ def test_golden_passes_every_stage(job):
 
 def test_golden_facts(job):
     a = job.stages["assembly"]
-    assert a["collisions"] == [] and a["n_poses"] > 20
+    assert a["collisions"] == [] and a["n_poses"] == 82            # rest + 9 x 9 (rest is off the shoulder grid)
+    assert [t["ok"] for t in a["tests"]] == [True] * 5, a["tests"]
+    assert a["tests"][2]["min_mm"] == pytest.approx(2.0, abs=0.01)  # arm vs turret over the shoulder range
+    assert min(c["min_mm"] for c in a["clearances"] if c["min_mm"] is not None) > 1.0
     assert a["reach_mm"] >= 150
     assert a["torques"]["j_shoulder"]["max_abs_Nm"] < 0.5 * a["torques"]["j_shoulder"]["allowed_Nm"]
     assert job.stages["export"]["joints"] == {"j_yaw": {"type": "revolute", "parent": "base", "child": "turret"},

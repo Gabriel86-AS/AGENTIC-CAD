@@ -46,6 +46,9 @@ def sig(gate, cause, location="", level="failure"):
     ("assembly", [sig("L5", "s_yaw and ebay overlap", "s_yaw <-> ebay")], "design", []),
     ("assembly", [sig("L6", "static torque too high", "plan.joints.j_shoulder")], "design", []),
     ("assembly", [sig("L5", "reach 120 < 150", "plan.params")], "design", []),
+    ("assembly", [sig("L5", "plan.tests[2] expect_clearance: arm and turret come 0.4 mm close", "arm <-> turret")],
+     "code", ["arm", "turret"]),
+    ("assembly", [sig("L5", "plan.tests[4] expect_reach: reach 140 mm", "plan.tests[4]")], "design", []),
     ("print", [sig("L7", "thin wall", "parts/turret.py")], "code", ["turret"]),
     ("print", [sig("L7", "fits the 180 mm build volume in no orientation", "parts/arm.py")], "design", []),
     ("export", [sig("export", "boom")], "stop", []),
@@ -81,6 +84,7 @@ def test_part_excerpts_name_the_right_calls():
     assert 'part.mate_to("s_sh.horn", at=\'horn_seat\')' in arm and "servo_u_bracket('s_sh'" in arm
     assert "fixed to `turret`" in arm and "`P.arm_len` = 155" in arm
     assert "label='tool'" in arm
+    assert "stay >= 1 mm from `turret` over `j_shoulder`" in arm and "touch `s_yaw` at rest" in base
 
 
 def test_checkpoint_lists_bom_joints_estimates():

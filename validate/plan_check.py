@@ -18,7 +18,7 @@ from components.card import load_card
 from schemas.plan import MOVING, AssemblyPlan
 from schemas.signal import Signal
 from validate.masses import actuator_limit, card_com_mm, card_mass_kg
-from validate.poses import grid
+from validate.poses import grid, sampled_joints
 from validate.statics import joint_loads, subtree
 
 ROD_G_PER_MM = 0.5            # P1 §4.4 L6-plan default linear density (estimate)
@@ -148,6 +148,34 @@ def payload_mass(plan: AssemblyPlan, tool):
     return [(owner, plan.requirements.payload_g / 1000.0, list(c.o))]
 
 
+def test_ref_signals(plan: AssemblyPlan, frames: dict) -> list[Signal]:
+    """plan.tests and plan.allow_overlap name existing owners, connectors and sampled joints."""
+    sigs = []
+    owners = set(frames)
+    sampled = {n for n, _, _ in sampled_joints(plan.model_dump())}
+    pairs = [("plan.allow_overlap[%d]" % i, a, b) for i, (a, b) in enumerate(plan.allow_overlap)]
+    pairs += [("plan.tests[%d]" % i, t.a, t.b) for i, t in enumerate(plan.tests) if hasattr(t, "a")]
+    for where, a, b in pairs:
+        bad = [o for o in (a, b) if o not in owners]
+        if bad:
+            sigs.append(_sig("failure", "plan", "%s names unknown owner %s" % (where, ", ".join(map(repr, bad))), where,
+                             "use part names or component ids: %s" % ", ".join(sorted(owners))))
+        elif a == b:
+            sigs.append(_sig("failure", "plan", "%s pairs %r with itself" % (where, a), where, "name two different owners"))
+    for i, t in enumerate(plan.tests):
+        where = "plan.tests[%d]" % i
+        ref = getattr(t, "near", None) or getattr(t, "tool", None)
+        if ref:
+            o, c = ref.split(".")
+            if o not in frames or c not in frames[o]:
+                sigs.append(_sig("failure", "plan", "%s: no connector %r" % (where, ref), where,
+                                 "reference an existing '<owner>.<connector>'"))
+        if getattr(t, "over_joint", None) and t.over_joint not in sampled:
+            sigs.append(_sig("failure", "plan", "%s: over_joint %r is not an independent moving joint" % (where, t.over_joint),
+                             where, "pick one of: %s" % ", ".join(sorted(sampled))))
+    return sigs
+
+
 def check_plan(plan: AssemblyPlan) -> PlanReport:
     sigs: list[Signal] = []
     cards = {}
@@ -208,6 +236,8 @@ def check_plan(plan: AssemblyPlan) -> PlanReport:
                 sigs.append(_sig("failure", "plan", "joint %r limits [%.3g, %.3g] rad exceed %s travel [%.3g, %.3g] rad"
                                  % (j.name, j.limits.lower, j.limits.upper, comps[j.driver].card, lo, hi), where,
                                  "clamp the limits to the servo range", servo_range_deg=rng))
+
+    sigs += test_ref_signals(plan, frames)
 
     # tool
     tools = tool_connectors(plan)

@@ -5,9 +5,18 @@ sweep_assembly request:
     poses                       [{joint: q}, ...]  rad / mm; coupled joints follow (Tree.joint_values)
     allow_overlap               [[owner, owner], ...]  pairs exempt from interference (plan.allow_overlap)
     min_volume_mm3              overlap threshold (default 1.0)
+    clearance_window_mm         min clearance is measured (OCCT distToShape) only for pairs whose bounding
+                                boxes come within this distance (default 5.0); farther pairs report None
+    probes                      [{a, b, poses: [{joint: q}], near: [owner, connector, radius_mm] (optional)}]:
+                                distance of one pair at each given pose (run_tests); with `near`, only the
+                                material of `a` within radius_mm of that connector's origin counts
   -> result = {tree, frames {owner: {conn: 4x4}}, mounts {component: conn},
                owners {owner: {volume_mm3, area_mm2, com_mm, inertia_mm5 (about the CoM, density 1), bbox}},
-               collisions [{pose, a, b, volume_mm3, bbox {owner: [xmin, ymin, zmin, xmax, ymax, zmax] in its part frame}}], n_poses, n_checks}
+               collisions [{pose, a, b, volume_mm3, bbox {owner: [xmin, ymin, zmin, xmax, ymax, zmax] in its part frame}}],
+               clearances [{a, b, min_mm (0 when they overlap, None if never within the window), pose, q, n_near}]
+                   for pairs that move against each other (different rigid groups, not exempt),
+               probes [{a, b, min_mm, pose, q, points [[x, y, z], [x, y, z]] (world, closest points)} | {a, b, error}],
+               n_poses, n_checks}
      Signals: tree problems (gate L5). Interference is reported as data; validate/assembly_check.py
      turns it into signals.
     Owners are placed by our FK (D15), no Assembly WB solve: the residual gate in build_assembly already
@@ -17,16 +26,20 @@ sweep_assembly request:
 mesh_parts request:
     meshes          {name: .FCStd}      out_dir     directory for <name>.stl
     linear_deflection_mm (default 0.05), angular_deflection_rad (default 0.25)
-  -> result = {name: {stl, n_facets}}; STL in the owner frame, mm.
+  -> result = {name: {stl, n_facets, holes}}; STL in the owner frame, mm.
+     holes = [{d, axis, center, length}]: internal cylindrical faces grouped by axis line and radius whose
+     angular span adds up to a full circle (fits probe, L7); axis sign-normalised, center at mid-length.
 """
 import itertools
+import math
 import os
 
 import FreeCAD as App
 import MeshPart
+import Part as OCC
 
 from assembly import owners as O
-from assembly.kinematics import GATE, Tree
+from assembly.kinematics import GATE, Tree, mul, origin
 
 
 def _signal(level, cause, location="", action=""):
@@ -93,6 +106,43 @@ def _close(docs):
             App.closeDocument(n)
 
 
+def _place(shapes, world):
+    placed = {}
+    for o, s in shapes.items():
+        ws = s.copy(False)
+        ws.Placement = O.to_placement(world[o])
+        placed[o] = ws
+    return placed
+
+
+def _probe(p, shapes, tree):
+    """Closest distance of owners a and b over the probe's poses (0 when they overlap)."""
+    a, b, near = p["a"], p["b"], p.get("near")
+    out = {"a": a, "b": b, "min_mm": None, "pose": None, "q": None, "points": None}
+    missing = [o for o in (a, b) if o not in shapes]
+    if missing:
+        out["error"] = "no solid for %s" % ", ".join(missing)
+        return out
+    for i, pose in enumerate(p.get("poses") or [{}]):
+        values, psigs = tree.joint_values(pose)
+        if any(s["level"] == "failure" for s in psigs):
+            out["error"] = "pose %d: %s" % (i, psigs[0]["cause"])
+            return out
+        world = tree.fk(values)
+        placed = _place({a: shapes[a], b: shapes[b]}, world)
+        if near:
+            owner, conn, r = near
+            at = origin(mul(world[owner], tree.frames[owner][conn]))
+            placed[a] = placed[a].common(OCC.makeSphere(float(r), App.Vector(*at)))
+            if placed[a].Volume <= 1e-9:
+                out["error"] = "%s has no material within %g mm of %s.%s" % (a, r, owner, conn)
+                return out
+        d, pts, _ = placed[a].distToShape(placed[b])
+        if out["min_mm"] is None or d < out["min_mm"]:
+            out.update(min_mm=d, pose=i, q=values, points=[_vec(pts[0][0]), _vec(pts[0][1])] if pts else None)
+    return out
+
+
 def sweep_assembly(req, res):
     plan, sigs = req["plan"], res["signals"]
     doc = App.newDocument("sweep")
@@ -115,6 +165,9 @@ def sweep_assembly(req, res):
     pairs = [(a, b) for a, b in itertools.combinations(sorted(shapes), 2) if frozenset((a, b)) not in exempt]
     min_vol = float(req.get("min_volume_mm3", 1.0))
 
+    window = float(req.get("clearance_window_mm", 5.0))
+    clear = {(a, b): {"a": a, "b": b, "min_mm": None, "pose": None, "q": None, "n_near": 0}
+             for a, b in pairs if group[a] != group[b]}
     collisions, n_checks, poses = [], 0, req.get("poses") or [{}]
     for i, pose in enumerate(poses):
         values, psigs = tree.joint_values(pose)
@@ -124,27 +177,80 @@ def sweep_assembly(req, res):
         if any(s["level"] == "failure" for s in psigs):
             continue
         world = tree.fk(values)
-        placed = {}
-        for o, s in shapes.items():
-            ws = s.copy(False)
-            ws.Placement = O.to_placement(world[o])
-            placed[o] = ws
+        placed = _place(shapes, world)
         for a, b in pairs:
             if i > 0 and group[a] == group[b]:
                 continue
             n_checks += 1
-            if not placed[a].BoundBox.intersect(placed[b].BoundBox):
+            box = App.BoundBox(placed[a].BoundBox)
+            box.enlarge(window)
+            if not box.intersect(placed[b].BoundBox):
                 continue
-            inter = placed[a].common(placed[b])
-            if inter.Volume > min_vol:
-                collisions.append({"pose": i, "q": values, "a": a, "b": b, "volume_mm3": inter.Volume,
-                                   "bbox": {o: _local_bbox(inter, world[o]) for o in (a, b)}})
-    res["result"].update({"owners": props, "collisions": collisions, "n_poses": len(poses), "n_checks": n_checks,
-                          "groups": group})
+            d = None
+            if placed[a].BoundBox.intersect(placed[b].BoundBox):
+                inter = placed[a].common(placed[b])
+                if inter.Volume > min_vol:
+                    collisions.append({"pose": i, "q": values, "a": a, "b": b, "volume_mm3": inter.Volume,
+                                       "bbox": {o: _local_bbox(inter, world[o]) for o in (a, b)}})
+                    d = 0.0
+            c = clear.get((a, b))
+            if c is None:
+                continue
+            if d is None:
+                d = placed[a].distToShape(placed[b])[0]
+            c["n_near"] += 1
+            if c["min_mm"] is None or d < c["min_mm"]:
+                c.update(min_mm=d, pose=i, q=values)
+    probes = [_probe(p, shapes, tree) for p in req.get("probes") or []]
+    res["result"].update({"owners": props, "collisions": collisions, "clearances": list(clear.values()),
+                          "probes": probes, "n_poses": len(poses), "n_checks": n_checks, "groups": group})
     res["metrics"] = {"n_owners": len(shapes), "n_pairs": len(pairs), "n_checks": n_checks,
                       "n_collisions": len(collisions)}
     res["ok"] = not any(s["level"] == "failure" for s in sigs)
     _close([doc] + opened)
+
+
+def _axis_key(axis, loc):
+    """Sign-normalised axis + the axis line's point closest to the origin: one key per hole line."""
+    a = [axis.x, axis.y, axis.z]
+    if next(c for c in a if abs(c) > 1e-9) < 0:
+        a = [-c for c in a]
+    p = [loc.x, loc.y, loc.z]
+    t = sum(pc * ac for pc, ac in zip(p, a))
+    return a, [pc - t * ac for pc, ac in zip(p, a)]
+
+
+def holes(shape, min_span_deg=300.0):
+    """Internal cylinders (normal toward the axis) whose faces cover >= min_span_deg around one axis line."""
+    groups = {}
+    for f in shape.Faces:
+        srf = f.Surface
+        if not isinstance(srf, OCC.Cylinder):
+            continue
+        u0, u1, v0, v1 = f.ParameterRange
+        um, vm = (u0 + u1) / 2, (v0 + v1) / 2
+        pt, n = f.valueAt(um, vm), f.normalAt(um, vm)
+        axis, loc = srf.Axis, srf.Center
+        a, p0 = _axis_key(axis, loc)
+        rel = pt - loc
+        radial = rel - axis * rel.dot(axis)
+        if radial.Length < 1e-9 or n.dot(radial) >= 0:      # outer cylinder (boss, rounded corner outside)
+            continue
+        key = (round(srf.Radius, 3),) + tuple(round(c, 3) for c in a + p0)
+        g = groups.setdefault(key, {"r": srf.Radius, "a": a, "p0": p0, "span": 0.0, "t": []})
+        g["span"] += math.degrees(abs(u1 - u0))
+        for v in (v0, v1):
+            q = f.valueAt(um, v)
+            g["t"].append(sum((qc - pc) * ac for qc, pc, ac in zip(_vec(q), g["p0"], g["a"])))
+    out = []
+    for g in groups.values():
+        if g["span"] < min_span_deg - 1e-6:
+            continue
+        t0, t1 = min(g["t"]), max(g["t"])
+        out.append({"d": round(2 * g["r"], 4), "axis": [round(c, 6) for c in g["a"]],
+                    "center": [round(pc + (t0 + t1) / 2 * ac, 4) for pc, ac in zip(g["p0"], g["a"])],
+                    "length": round(t1 - t0, 4)})
+    return sorted(out, key=lambda h: (h["d"], h["center"]))
 
 
 def mesh_parts(req, res):
@@ -164,7 +270,7 @@ def mesh_parts(req, res):
             mesh = MeshPart.meshFromShape(Shape=shape, LinearDeflection=lin, AngularDeflection=ang, Relative=False)
             stl = os.path.join(out_dir, name + ".stl")
             mesh.write(stl)
-            result[name] = {"stl": stl, "n_facets": mesh.CountFacets}
+            result[name] = {"stl": stl, "n_facets": mesh.CountFacets, "holes": holes(shape)}
         finally:
             App.closeDocument(d.Name)
     res["result"] = result

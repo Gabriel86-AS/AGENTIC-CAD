@@ -68,7 +68,13 @@ intents). The assembly is built from your connectors, so the plan is the contrac
   = a part or a component id; revolute limits in rad, inside the servo card range; effort/velocity
   default "from_card". Mating rule: at q = 0 parent and child frames coincide; the child turns about the
   parent connector's z. A kinematic tree, no loops.
-- allow_overlap: [[owner_a, owner_b]] only for intended contact (rarely needed).
+- tests: assembly tests checked after the parts are built (L5); each names owners (part or component id):
+  {{"expect": "clearance", "a", "b", "min_mm": 1.0, "over_joint": "<joint>", "samples": 9}} (over_joint
+  omitted = the whole sweep); {{"expect": "contact", "a", "b", "tol_mm": 0.5, "near": "<owner>.<connector>"}}
+  (at rest); {{"expect": "reach", "op": ">=", "value_mm": 150}}; {{"expect": "allow_overlap", "a", "b",
+  "reason": "..."}} only for intended overlap (press fit, seated component). Add a clearance test for every
+  link that swings past another part or a servo body, and a contact test for each seated component.
+- allow_overlap: [[owner_a, owner_b]] (legacy, no reason); prefer allow_overlap tests.
 - Exactly one connector labelled "tool" on the last link when the design is actuated.
 
 ## How to work

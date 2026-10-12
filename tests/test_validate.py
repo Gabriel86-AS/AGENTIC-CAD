@@ -11,7 +11,10 @@ from schemas.plan import AssemblyPlan
 from validate.assembly_check import check_assembly
 from validate.masses import printed_mass_kg
 from validate.plan_check import check_plan
-from validate.poses import grid
+from validate.poses import grid, joint_sweep, sweep_poses
+from validate.run_tests import evaluate, probe_requests
+from agents.router import route
+from harness.pipeline import JobReport
 from validate.printability import check_mesh, check_print
 from validate.statics import joint_loads
 
@@ -55,6 +58,67 @@ def test_grid_decimates_and_starts_at_rest():
     assert grid(p, 9, 25)[0] == {"j_yaw": 0.0, "j_sh": 0.2}  # rest clamped into the limits
     p["joints"][1]["mimic"] = {"joint": "j_yaw"}
     assert len(grid(p, 9, 25)) == 9                         # coupled joints are not sampled
+
+
+def _chain(n):
+    """n revolute joints, +-1 rad, as a plan dict (only what the samplers read)."""
+    return {"joints": [{"name": "j%d" % i, "type": "revolute", "limits": {"lower": -1.0, "upper": 1.0}} for i in range(n)]}
+
+
+def test_sweep_poses_grid_then_latin_hypercube():
+    assert len(sweep_poses(_chain(1))) == 9
+    assert len(sweep_poses(_chain(2))) == 81                    # 9 x 9, rest (0, 0) is a grid point
+    three = sweep_poses(_chain(3))
+    assert len(three) == 125 and {q["j0"] for q in three} == {-1.0, -0.5, 0.0, 0.5, 1.0}   # 5 per joint
+    four = sweep_poses(_chain(4))
+    assert len(four) == 125 and four[0] == {f"j{i}": 0.0 for i in range(4)}
+    assert {"j0": -1.0, "j1": 0.0, "j2": 0.0, "j3": 0.0} in four and {"j0": 0.0, "j1": 0.0, "j2": 0.0, "j3": 1.0} in four
+    lhs = four[1 + 2 * 4:]
+    for j in ("j0", "j3"):                                      # one sample per stratum and joint
+        strata = sorted(int((q[j] + 1.0) / 2.0 * len(lhs)) for q in lhs)
+        assert strata == list(range(len(lhs)))
+    assert sweep_poses(_chain(4)) == four                       # seeded: reproducible
+    assert [q["j1"] for q in joint_sweep(_chain(2), "j1", 3)] == [-1.0, 0.0, 1.0]
+
+
+def test_plan_tests_schema_and_refs():
+    plan = arm_plan(tests=[
+        {"expect": "contact", "a": "s_sh", "b": "turret", "near": "turret.servo_mount"},
+        {"expect": "clearance", "a": "arm", "b": "turret", "over_joint": "j_sh"},
+        {"expect": "reach", "value_mm": 140},
+        {"expect": "allow_overlap", "a": "arm", "b": "s_sh", "reason": "horn spline in its recess"}])
+    assert plan.overlap_pairs() == [("arm", "s_sh")]
+    assert check_plan(plan).ok
+    with pytest.raises(ValueError):
+        arm_plan(tests=[{"expect": "clearance", "a": "arm.tip", "b": "turret"}])          # owner, not connector
+    with pytest.raises(ValueError):
+        arm_plan(tests=[{"expect": "allow_overlap", "a": "arm", "b": "s_sh"}])            # reason required
+    bad = arm_plan(tests=[{"expect": "clearance", "a": "arm", "b": "tower", "over_joint": "j_x"},
+                          {"expect": "contact", "a": "s_sh", "b": "turret", "near": "turret.nope"}],
+                   allow_overlap=[("arm", "ghost")])
+    causes = " | ".join(s.cause for s in check_plan(bad).signals if s.level == "failure")
+    assert "unknown owner 'tower'" in causes and "over_joint 'j_x'" in causes
+    assert "no connector 'turret.nope'" in causes and "unknown owner 'ghost'" in causes
+
+
+def test_run_tests_evaluate_and_route():
+    plan = arm_plan(tests=[
+        {"expect": "contact", "a": "s_sh", "b": "turret", "tol_mm": 0.5},
+        {"expect": "clearance", "a": "arm", "b": "turret", "min_mm": 1.0, "over_joint": "j_sh", "samples": 5},
+        {"expect": "clearance", "a": "arm", "b": "base", "min_mm": 2.0},
+        {"expect": "reach", "op": ">=", "value_mm": 160}])
+    sweep = grid(plan.model_dump(), 3, 9)
+    probes, index = probe_requests(plan, sweep)
+    assert index == {0: 0, 1: 1, 2: 2} and len(probes[0]["poses"]) == 1
+    assert len(probes[1]["poses"]) == 5 and probes[2]["poses"] == sweep
+    measured = [{"min_mm": 0.0, "q": {}, "points": None},
+                {"min_mm": 0.4, "q": {"j_sh": 1.57}, "points": [[0, 0, 0], [0, 0, 0.4]]},
+                {"min_mm": 5.0, "q": {}, "points": None}]
+    res, sigs = evaluate(plan, measured, index, reach_fn=lambda tool: (150.0, {}))
+    assert [r["ok"] for r in res] == [True, False, True, False]
+    assert [s.location for s in sigs] == ["arm <-> turret", "plan.tests[3]"]
+    r = route(JobReport(ok=False, failed_stage="assembly", signals=sigs[:1]), plan)
+    assert r.kind == "code" and list(r.parts) == ["arm", "turret"]
 
 
 def test_joint_loads_point_mass():
@@ -198,6 +262,10 @@ def test_check_assembly_clean(parts):
     r = check_assembly(plan, good, tmp / "io")
     assert r.ok, r.feedback
     assert r.collisions == [] and r.n_poses == 9
+    # moving pairs only (base-s_yaw are one rigid group); the arm sits on the horn face over the servo
+    assert {(c["a"], c["b"]) for c in r.clearances} == {("arm", "base"), ("arm", "s_yaw")}
+    near = next(c for c in r.clearances if c["b"] == "s_yaw")
+    assert near["n_near"] == 9 and 0 <= near["min_mm"] < 5
     # pairs: base-arm, base-s_yaw (same rigid group: rest only), arm-s_yaw -> 3 + 8 * 2
     assert r.n_checks == 3 + 8 * 2
     assert r.reach_mm == pytest.approx(100.0, abs=1e-6)      # tool 100 mm from the horn axis
@@ -223,6 +291,29 @@ def test_check_assembly_reports_overlaps(parts):
     bb = pairs["arm <-> s_yaw"].evidence["bbox_mm"]["arm"]
     assert [round(bb[3] - bb[0], 1), round(bb[4] - bb[1], 1), round(bb[5] - bb[2], 1)] == [5.8, 5.8, 1.0]
     assert "in arm frame" in pairs["arm <-> s_yaw"].cause and "in s_yaw frame" in pairs["arm <-> s_yaw"].cause
+
+
+def test_check_assembly_runs_authored_tests(parts):
+    tmp, plan, good, _ = parts
+    plan = plan.model_copy(update={"tests": AssemblyPlan.model_validate({**plan.model_dump(), "tests": [
+        {"expect": "contact", "a": "s_yaw", "b": "base", "near": "base.servo_mount"},
+        {"expect": "clearance", "a": "arm", "b": "base", "min_mm": 20.0, "over_joint": "j_yaw", "samples": 3},
+        {"expect": "reach", "op": "<=", "value_mm": 90},
+        {"expect": "allow_overlap", "a": "arm", "b": "s_yaw", "reason": "spline tip in the horn recess"}]}).tests})
+    r = check_assembly(plan, good, tmp / "io")
+    assert [t["ok"] for t in r.tests] == [True, False, False, True], r.tests
+    # within 15 mm of the mount only the case is in reach (the flange is wider): the pocket's 0.3 mm sliding fit
+    assert r.tests[0]["min_mm"] == pytest.approx(0.3, abs=1e-6)
+    # arm underside at the horn face (base top 10 + horn face 15.9), the 120 mm plate below it at every yaw
+    assert r.tests[1]["min_mm"] == pytest.approx(15.9, abs=0.01)
+    assert r.tests[2]["reach_mm"] == pytest.approx(100.0, abs=1e-6)
+    fails = {s.location: s.cause for s in r.signals if s.level == "failure"}
+    assert set(fails) == {"arm <-> base", "plan.tests[2]"}, r.feedback
+    # min clearance per moving pair; the exempt pair is not measured
+    pairs = {(c["a"], c["b"]): c for c in r.clearances}
+    assert set(pairs) == {("arm", "base")}
+    assert pairs[("arm", "base")]["min_mm"] is None             # never within the 5 mm window
+    assert "tests 2/4 pass" in r.feedback
 
 
 def test_allow_overlap_exempts_pair(parts):

@@ -4,9 +4,14 @@ Only independent moving joints are sampled; coupled joints (mimic) follow throug
 Grid = `per_joint` evenly spaced values over each joint's limits (ends included), reduced until the
 grid has at most `max_poses` poses (P1 §4.4: 9 per joint, 2 joints -> 81, decimated to 25 -> 5 x 5).
 Pose 0 is always the rest pose (all zero, or the nearest limit when 0 is outside them).
+
+sweep_poses (L5, P2 §3.2): the full grid while it fits `max_poses` at 9 per joint down to 5 per joint
+(3 joints -> 5^3 = 125); beyond that a Latin hypercube: rest + each joint alone at its two limits + stratified
+samples (one per stratum and joint, stratum centres, seeded), `max_poses` in total.
 """
 import itertools
 import math
+import random
 
 from assembly.kinematics import LINEAR, ROTARY
 
@@ -49,3 +54,43 @@ def grid(plan, per_joint=9, max_poses=25):
         if p != rest:
             poses.append(p)
     return poses
+
+
+LHS_MIN_PER_JOINT = 5      # below this a grid misses too much of each joint's range -> Latin hypercube
+LHS_SEED = "agenticcad-l5"
+
+
+def latin_hypercube(plan, n, seed=LHS_SEED):
+    """n poses, each joint's range cut into n strata, every stratum used once per joint (stratum centres)."""
+    joints = sampled_joints(plan)
+    rng = random.Random(seed)
+    cols = []
+    for _, lo, hi in joints:
+        idx = list(range(n))
+        rng.shuffle(idx)
+        cols.append([lo + (hi - lo) * (i + 0.5) / n for i in idx])
+    return [{name: col[k] for (name, _, _), col in zip(joints, cols)} for k in range(n)]
+
+
+def sweep_poses(plan, per_joint=9, max_poses=125, seed=LHS_SEED):
+    """Interference sweep poses: [rest] + grid, or a Latin hypercube when the grid would need < 5 per joint."""
+    joints = sampled_joints(plan)
+    if len(joints) <= 1 or LHS_MIN_PER_JOINT ** len(joints) <= max_poses:
+        return grid(plan, per_joint, max_poses)
+    rest = rest_pose(plan)
+    poses = [rest]
+    for name, lo, hi in joints:
+        for q in (lo, hi):
+            p = dict(rest, **{name: q})
+            if p not in poses:
+                poses.append(p)
+    return poses + latin_hypercube(plan, max(0, max_poses - len(poses)), seed)
+
+
+def joint_sweep(plan, joint, samples=9):
+    """`samples` values over one joint's limits, every other joint at rest (run_tests expect_clearance)."""
+    rest = rest_pose(plan)
+    lim = next(((lo, hi) for n, lo, hi in sampled_joints(plan) if n == joint), None)
+    if lim is None:
+        return [rest]
+    return [dict(rest, **{joint: q}) for q in linspace(lim[0], lim[1], samples)]

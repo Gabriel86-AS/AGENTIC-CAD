@@ -195,5 +195,38 @@
         "upper": 0.3
       }
     }
+  ],
+  "tests": [
+    {
+      "expect": "contact",
+      "a": "s_yaw",
+      "b": "base",
+      "near": "base.servo_mount"
+    },
+    {
+      "expect": "contact",
+      "a": "s_sh",
+      "b": "turret",
+      "near": "turret.sh_mount"
+    },
+    {
+      "expect": "clearance",
+      "a": "arm",
+      "b": "turret",
+      "min_mm": 1.0,
+      "over_joint": "j_shoulder",
+      "samples": 9
+    },
+    {
+      "expect": "clearance",
+      "a": "arm",
+      "b": "base",
+      "min_mm": 3.0
+    },
+    {
+      "expect": "reach",
+      "op": ">=",
+      "value_mm": 150
+    }
   ]
 }

@@ -4,7 +4,7 @@ stages between their turns.
 
     plan    check_plan (schema, tree, DOF, reach, L6-plan)       DESIGN
     parts   compile_part per plan part (L0-L4)                    CODE
-    L5/L6   check_assembly (interference sweep, reach, torque)    CODE / DESIGN
+    L5/L6   check_assembly (interference sweep, clearances, tests, reach, torque)  CODE / DESIGN
     L7      check_print (build volume, watertight, min wall)      CODE / DESIGN
     build   build_assembly -> assembly.FCStd (rest pose)
     export  export_package (URDF + meshes + print STLs)
@@ -90,7 +90,8 @@ def run_job(job_dir: Path, out_dir: Path | None = None, robot: str | None = None
 
     ac = check_assembly(plan, rep.fcstd, io)
     if not stage("assembly", ac.ok, ac.signals, ac.feedback, reach_mm=ac.reach_mm, torques=ac.torques,
-                 masses=ac.masses, collisions=ac.collisions, n_poses=ac.n_poses):
+                 masses=ac.masses, collisions=ac.collisions, clearances=ac.clearances, tests=ac.tests,
+                 n_poses=ac.n_poses):
         return done()
 
     pc = check_print(plan, rep.fcstd, io, out / "meshes")
