@@ -6,7 +6,8 @@
 Metrics per case: status and reason; spec match against the case's target Spec; pass/fail per pipeline
 stage of the last round and the gates of the open failures; DoF-0 rate (sketches with DoF 0 / all sketches
 over every compile that got that far); compiles, sessions and escalations per part; pipeline rounds and
-design rollbacks; tokens, cost and wall time. The P1 exit criterion is ≥ 4/5 pack cases and 2/2 core cases.
+design rollbacks; L8 review; router (routes, classified, overruled) and the best candidate on exhaustion;
+tokens, cost and wall time. The P1 exit criterion is ≥ 4/5 pack cases and 2/2 core cases.
 """
 import json
 import time
@@ -81,6 +82,7 @@ def summarize(case: dict, job_dir: Path) -> dict:
         "parts": res.get("parts") or {},
         "rounds": res.get("rounds", 0), "rollbacks": res.get("rollbacks", 0),
         "review": {k: v for k, v in (res.get("review") or {}).items() if k in ("status", "rounds", "scores", "route_hint")},
+        "router": res.get("router") or {}, "best": res.get("best") or {},
         "tokens_in": totals.get("tokens_in", 0), "tokens_out": totals.get("tokens_out", 0),
         "cost_usd": totals.get("cost_usd", 0.0), "sessions": totals.get("sessions", 0),
         "wall_s": res.get("elapsed_s", 0.0),

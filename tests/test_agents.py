@@ -35,6 +35,7 @@ def no_look(monkeypatch):
     """L3v has its own tests (test_look_*); the scripted jobs below would need a judge for every part."""
     monkeypatch.setattr(stages, "LOOK", False)
     monkeypatch.setattr(job_mod, "REVIEW", False)   # L8: tests/test_review.py
+    monkeypatch.setattr(job_mod, "CLASSIFY", False)   # router v2: tests/test_router.py
 
 
 def golden_plan(**over) -> AssemblyPlan:

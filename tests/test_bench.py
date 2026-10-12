@@ -16,6 +16,7 @@ def no_flex(monkeypatch):
     monkeypatch.setattr(harness_tools, "FLEX", False)
     monkeypatch.setattr(stages, "LOOK", False)   # L3v needs a judge role; tested in test_vision
     monkeypatch.setattr(job_mod, "REVIEW", False)  # L8 needs a review role; tested in test_review
+    monkeypatch.setattr(job_mod, "CLASSIFY", False)  # router v2 needs a router role; tested in test_router
 
 
 def test_cases_cover_p1_bench():

@@ -24,7 +24,7 @@ from schemas.signal import Signal
 from validate.plan_check import PlanReport, check_plan
 
 ROOT = Path(__file__).resolve().parents[1]
-Backends = Callable[[str], LLMBackend]   # role: "requirements" | "design" | "part" | "part_escalated" | "look" | "review"
+Backends = Callable[[str], LLMBackend]   # role: "requirements" | "design" | "part" | "part_escalated" | "look" | "review" | "router"
 DEFAULT_GENERIC_BAY = "electronics/generic_bay"
 DEFAULT_SERVO = "servo/mg996r"
 _COMPILE_LOG = threading.Lock()   # parallel part agents append to one compiles.jsonl

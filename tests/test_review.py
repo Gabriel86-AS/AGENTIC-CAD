@@ -38,6 +38,7 @@ DESIGN = {"scores": dict(SCORES, geometry=2), "route_hint": "design", "issues": 
 def fast(monkeypatch):
     monkeypatch.setattr(harness_tools, "FLEX", False)
     monkeypatch.setattr(stages, "LOOK", False)
+    monkeypatch.setattr(job_mod, "CLASSIFY", False)
 
 
 # ---- schema and routing ------------------------------------------------------------------------

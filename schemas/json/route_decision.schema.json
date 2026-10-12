@@ -1,0 +1,32 @@
+{
+  "additionalProperties": false,
+  "description": "Router v2 (P2 \u00a73.5): the classifier's answer for failures the rule table cannot route for sure.",
+  "properties": {
+    "route": {
+      "enum": [
+        "code",
+        "design"
+      ],
+      "title": "Route",
+      "type": "string"
+    },
+    "parts": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Parts",
+      "type": "array"
+    },
+    "reason": {
+      "minLength": 1,
+      "title": "Reason",
+      "type": "string"
+    }
+  },
+  "required": [
+    "route",
+    "reason"
+  ],
+  "title": "RouteDecision",
+  "type": "object"
+}

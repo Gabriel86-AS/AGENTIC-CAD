@@ -5,7 +5,7 @@ converted here with `from_worker` (info -> note). Gates on the orchestrator side
 """
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from harness.protocol import Signal as WorkerSignal
 
@@ -40,3 +40,18 @@ class TraceEvent(BaseModel):
     tokens_out: int = 0
     cost_usd: float = 0.0
     freecad_version: str | None = None
+
+
+class RouteDecision(BaseModel):
+    """Router v2 (P2 §3.5): the classifier's answer for failures the rule table cannot route for sure."""
+    model_config = ConfigDict(extra="forbid")
+
+    route: Literal["code", "design"]   # code: regenerate `parts` under the same plan; design: revise the plan
+    parts: list[str] = Field(default_factory=list)
+    reason: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _parts(self):
+        if self.route == "code" and not self.parts:
+            raise ValueError("route code names no part to regenerate (parts: [...])")
+        return self

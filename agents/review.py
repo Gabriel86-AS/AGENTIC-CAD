@@ -198,7 +198,7 @@ def to_route(v: ReviewVerdict) -> Route:
     if v.route_hint == "pass":
         return Route("pass")
     if v.route_hint == "design":
-        return Route("design", signals=[sig(i, "failure") for i in major] + minor, reason="L8 review")
+        return Route("design", signals=[sig(i, "failure") for i in major] + minor, reason="L8 review", source="L8")
     parts: dict = {}
     for i in major:
         for p in i.parts:
@@ -208,7 +208,7 @@ def to_route(v: ReviewVerdict) -> Route:
             for p in i.parts:
                 if p in parts:
                     parts[p].append(sig(i, "warning"))
-    return Route("code", parts=parts, reason="L8 review")
+    return Route("code", parts=parts, reason="L8 review", source="L8")
 
 
 def record(job_dir: Path, entry: dict) -> dict:
