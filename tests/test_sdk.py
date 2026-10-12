@@ -503,6 +503,39 @@ def test_pack_composite_errors(cases):
     assert "not a bearing" in c["seat_not_bearing"]["cause"]
     assert "rollers must be an int >= 3" in c["turntable_rollers"]["cause"]
     assert "no room for the trough" in c["hollow_no_room"]["cause"]
+    assert "by must be 'dovetail' or 'screws'" in c["split_by"]["cause"]
+    assert "side must be 'a'" in c["split_side"]["cause"]
+
+
+def test_split_joint_dovetail(cases):
+    c = get(cases, "split_dovetail")
+    clr = PROFILE["fits"]["close"]
+    assert c["ret"] == pytest.approx({"length": 12, "width": 14, "height": 15, "clearance": clr})
+    for half in ("a", "b"):
+        assert_sound(c[half])
+        assert c[half]["flex"]["failures"] == [] and c[half]["flex"]["runs"] > 0, c[half]["flex"]
+    # a: 40 x 30 x 15 bar + a 14 -> 18 mm trapezoid tongue, 12 long, through the 15 mm height (x 0..12)
+    assert vol(c["a"]) == pytest.approx(40 * 30 * 15 + (14 + 18) / 2 * 12 * 15)
+    assert c["a"]["m0"]["bbox"][3] == pytest.approx(12)
+    # b: the slot is the tongue + the close fit (half per side), 12 + clr / 2 deep
+    assert vol(c["b"]) == pytest.approx(40 * 30 * 15 - (14 + 18 + 2 * clr) / 2 * (12 + clr / 2) * 15)
+    assert c["common_mm3"] == pytest.approx(0, abs=1e-6)
+
+
+def test_split_joint_screws(cases):
+    c = get(cases, "split_screws")
+    clr = PROFILE["fits"]["close"]
+    for half in ("a", "b"):
+        assert_sound(c[half])
+        assert c[half]["flex"]["failures"] == [], c[half]["flex"]
+    tap, through = PROFILE["screws"]["M3"]["tap"], PROFILE["screws"]["M3"]["clearance"]
+    hole = lambda d, l: math.pi * d * d / 4 * l
+    # a: 14 x 12 x 7 tongue with two tap holes across it; b: 14.3 x 12.15 x 7.3 pocket, clearance holes through 15
+    assert vol(c["a"]) == pytest.approx(40 * 20 * 15 + 14 * 12 * 7 - 2 * hole(tap, 7), rel=1e-6)
+    assert vol(c["b"]) == pytest.approx(40 * 20 * 15 - (14 + clr) * (12 + clr / 2) * (7 + clr)
+                                        - 2 * hole(through, 15 - 7 - clr), rel=1e-6)
+    assert set(c["holes_a"]) == {tap} and set(c["holes_b"]) == {through}
+    assert c["common_mm3"] == pytest.approx(0, abs=1e-6)
 
 
 V1_SAMPLES = ["polyline", "rounded_rect", "fillet_chamfer", "hole_edges", "shell", "mirror", "pattern_linear",

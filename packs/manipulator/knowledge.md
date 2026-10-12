@@ -37,12 +37,15 @@ child's z points from the servo into the driven part. In the part programs:
 - holder: `part.mount("<servo>", at="<conn>")` cuts the case pocket, M4 taps and the cable keep-out;
 - driven part: `part.mate_to("<servo>.horn", at="<conn>")` or the composite below.
 
-**`part.servo_u_bracket(servo, at, length=None, width=30, thick=5, gap=2, idler="clearance_m3")`** —
+**`part.servo_u_bracket(servo, at, length=None, width=30, thick=5, gap=2, idler="clearance_m3", horizontal=False)`** —
 use it whenever a servo drives a link that carries load (shoulder, elbow, tilt). Plate A sits on the horn
 (recess, M2 taps, screwdriver access), plate B passes under the case bottom with an idler bore on the
 shaft axis, and a bridge at `x = length` joins them. Default length clears the flange in the swept
 half-plane (±90°). Returns `length, width, thick, gap, bridge_x, plate_b_z, mid_z` (Qs in the frame of
 `at`): extend the link from the bridge outer face (`x = bridge_x`, centred at `z = mid_z`).
+A U-bracket link prints on its side (plates vertical): put the beam flush with one bracket edge
+(`center=(0, (beam_t - width) / 2)` on a datum at the bridge) so nothing floats, and pass
+`horizontal=True` (the idler bore then lies horizontal). Golden B1-3 `arm.py` does this.
 The idler needs a coaxial pin or M3 screw fixed to the holder below the case: give the holder a lug
 under the servo with a hole on the shaft axis. Do **not** declare the idler as a joint (no closed loops,
 D10); L5 checks the clearance.

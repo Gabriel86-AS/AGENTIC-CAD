@@ -501,6 +501,41 @@ def _plan_redefined():
     part.params(plate_len=60)
 
 
+# ---- split joint (T2.4) ------------------------------------------------------------------------
+
+def _split_half(name, side, by, bar_w=20, **kw):
+    """40 x bar_w x 15 bar on the -x (a) or +x (b) side of the cut at x = 0; connector z = +x (a -> b),
+    x = +y, so the frame's y (the dovetail slide / screw axis) is the part's z."""
+    part = Part(name)
+    p = part.params(bar_l=40, bar_w=bar_w, bar_h=15)
+    cx = -p.bar_l / 2 if side == "a" else p.bar_l / 2
+    part.pad(part.sketch("body", on="XY").rect(p.bar_l, p.bar_w, center=(cx, 0)), p.bar_h)
+    part.connector("split", origin=(0, 0, p.bar_h / 2), z=(1, 0, 0), x=(0, 1, 0), label="split")
+    j = part.split_joint("split", side, by=by, **kw)
+    return part, j
+
+
+def _split_case(by, bar_w=20, **kw):
+    a, ja = _split_half("split_%s_a" % by, "a", by, bar_w, **kw)
+    b, jb = _split_half("split_%s_b" % by, "b", by, bar_w, **kw)
+    out = {"ret": {k: float(getattr(ja, k)) for k in ("length", "width", "height", "clearance")},
+           "a": run(a, {}, flex_runs=FLEX_RUNS), "b": run(b, {}, flex_runs=FLEX_RUNS)}
+    out["common_mm3"] = a.body.Shape.common(b.body.Shape).Volume       # assembled in place: no collision
+    out["holes_a"] = sorted(round(2 * f.Surface.Radius, 3) for f in a.body.Shape.Faces if "Cylinder" in str(f.Surface))
+    out["holes_b"] = sorted(round(2 * f.Surface.Radius, 3) for f in b.body.Shape.Faces if "Cylinder" in str(f.Surface))
+    return out
+
+
+@case
+def split_dovetail():
+    return _split_case("dovetail", height=15, bar_w=30)        # the 18.3 mm slot keeps walls at bar_w - 20 %
+
+
+@case
+def split_screws():
+    return _split_case("screws", height=7, width=14, screws=2)
+
+
 @case
 def errors():
     attempts = {
@@ -530,6 +565,8 @@ def errors():
         "seat_not_bearing": lambda: _with_conn("err_x").bearing_seat("servo/mg996r", at="conn"),
         "turntable_rollers": lambda: _with_conn("err_y").turntable_base("servo/mg996r", at="conn", rollers=2),
         "hollow_no_room": lambda: Part("err_z").hollow_link("XY", 30, 20, 6),
+        "split_by": lambda: _with_conn("err_sa").split_joint("conn", "a", 10, by="glue"),
+        "split_side": lambda: _with_conn("err_sb").split_joint("conn", "male", 10),
     }
     out = {}
     for k, fn in attempts.items():

@@ -5,7 +5,7 @@ stages between their turns.
     plan    check_plan (schema, tree, DOF, reach, L6-plan)       DESIGN
     parts   compile_part per plan part (L0-L4)                    CODE
     L5/L6   check_assembly (interference sweep, clearances, tests, reach, torque)  CODE / DESIGN
-    L7      check_print (build volume, watertight, min wall)      CODE / DESIGN
+    L7      check_print (orientation, build volume, overhang, wall, fits, manifold)   CODE / DESIGN
     build   build_assembly -> assembly.FCStd (rest pose)
     export  export_package (URDF + meshes + print STLs)
     D1-D4   check_description (check_urdf, Pinocchio, gz sdf)
@@ -94,9 +94,9 @@ def run_job(job_dir: Path, out_dir: Path | None = None, robot: str | None = None
                  n_poses=ac.n_poses):
         return done()
 
-    pc = check_print(plan, rep.fcstd, io, out / "meshes")
-    if not stage("print", pc.ok, pc.signals, pc.feedback,
-                 parts={k: {kk: v for kk, v in p.items() if kk != "stl"} for k, p in pc.parts.items()}):
+    pc = check_print(plan, rep.fcstd, io, out / "meshes", report=out / "print_report.json")
+    if not stage("print", pc.ok, pc.signals, pc.feedback, report=str(out / "print_report.json"),
+                 parts={k: {kk: v for kk, v in p.items() if kk not in ("stl", "holes")} for k, p in pc.parts.items()}):
         return done()
 
     ab = build_assembly(plan, rep.fcstd, io, out / "build" / "assembly.FCStd")

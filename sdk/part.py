@@ -986,6 +986,50 @@ class Part:
         s = self.sketch(name + "_sketch", on=on).polyline(points, name="profile")
         return self.pad(s, self._q(thick, name + "_thick"), symmetric=True, name=name + "_pad")
 
+    def split_joint(self, at, side, height, by="dovetail", length=12, width=14, flare=4, screw="m3", screws=2,
+                    name=None):
+        """Joint feature for a part split in two plan parts held by a `fixed` joint (L7 build volume, P2 §3.3).
+        Both halves declare connector `at` on the cut face with the same frame: z from half "a" into half "b",
+        x along the face; the plan joins them with a fixed joint (connector frames coincide).
+          by="dovetail"  a: trapezoid tongue, `width` at the face widening by `flare` over `length` along z,
+                         `height` thick along y (the halves slide together along y); b: the matching slot
+                         + close fit, through b along y.
+          by="screws"    a: rectangular tongue width x length x height with `screws` tap holes across it (y);
+                         b: the matching pocket + close fit (the tongue enters along z) and clearance holes
+                         through b along y. Screw heads sit on b's outer faces.
+        Returns length, width, height, clearance; params <name>_length, _width, _height (_flare)."""
+        if by not in ("dovetail", "screws"):
+            raise SDKError("sdk", "split_joint: by must be 'dovetail' or 'screws', got %r" % (by,))
+        if side not in ("a", "b"):
+            raise SDKError("sdk", "split_joint: side must be 'a' (tongue) or 'b' (slot), got %r" % (side,))
+        if by == "screws" and (not isinstance(screws, int) or screws < 1):
+            raise SDKError("sdk", "split_joint: screws must be an int >= 1, got %r" % (screws,))
+        name = self._new_name(name or "split_" + side, "split")
+        frame = self._connector_frame(at, "split_joint", name)
+        L, w, h = self._q(length, name + "_length"), self._q(width, name + "_width"), self._q(height, name + "_height")
+        clr = self._profile_q("fit_close", self.profile["fits"]["close"])
+        # sketch plane = the frame's x-z plane (normal +y): sketch (u, v) = (x, -z)
+        xz = self._local_datum(name + "_plane", frame, angles=(0, 0, -90))
+        made = []
+        if by == "dovetail":
+            fl = self._q(flare, name + "_flare")
+            n, t, d = (w / 2, (w + fl) / 2, L) if side == "a" else ((w + clr) / 2, (w + fl + clr) / 2, L + clr / 2)
+            s = self.sketch(name + "_sketch", on=xz).polyline([(-n, 0), (n, 0), (t, -d), (-t, -d)], name="dovetail")
+            made.append(self.pad(s, h, symmetric=True, name=name + "_tongue") if side == "a"
+                        else self.pocket(s, through=True, symmetric=True, name=name + "_slot"))
+        else:
+            if side == "a":
+                s = self.sketch(name + "_sketch", on=xz).rect(w, L, center=(0, -L / 2), name="tongue")
+                made.append(self.pad(s, h, symmetric=True, name=name + "_tongue"))
+            else:
+                s = self.sketch(name + "_sketch", on=xz).rect(w + clr, L + clr / 2, center=(0, -(L + clr / 2) / 2),
+                                                              name="slot")
+                made.append(self.pocket(s, depth=h + clr, symmetric=True, name=name + "_slot"))
+            pts = [(w * ((k + 0.5) / screws - 0.5), -L / 2) for k in range(screws)]
+            made.append(self.hole(xz, at=pts, fit=("tap_" if side == "a" else "clearance_") + screw.lower(),
+                                  name=name + "_screws"))
+        return ParamSet({"length": L, "width": w, "height": h, "clearance": clr, "made": made})
+
     # ---- results ---------------------------------------------------------------------------
     def report(self) -> dict:
         """Recompute and collect the L1/L2/L3 facts (P1 §4.4) for this part."""

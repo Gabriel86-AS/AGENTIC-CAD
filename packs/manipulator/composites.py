@@ -24,10 +24,11 @@ from sdk.part import Datum, Part, ParamSet
 
 
 def servo_u_bracket(self, servo, at, length=None, width=30, thick=5, gap=2, idler="clearance_m3", idler_d=None,
-                    access=True, name=None):
+                    access=True, horizontal=False, name=None):
     """U bracket driven by `servo` ("<component>"): plate A on its horn at connector `at`, plate B beyond the
     case bottom with an idler bore on the axis, joined by a bridge at x = length (axis -> bridge inner face).
-    length default: clears the flange corner in the swept half-plane + 3 mm. Returns a ParamSet (frame of
+    length default: clears the flange corner in the swept half-plane + 3 mm. horizontal=True: the bracket prints
+    on its side (idler bore axis horizontal), so the bore gets the profile's horizontal allowance. Returns a ParamSet (frame of
     `at`): length, width, thick, gap, bridge_x (outer face x), plate_b_z (outer face z, < 0), mid_z (bridge
     centre z). Params: <name>_length, _width, _thick, _gap; card dims as <servo>_<param>."""
     card, prefix = _servo(self, servo, "servo_u_bracket")
@@ -62,7 +63,8 @@ def servo_u_bracket(self, servo, at, length=None, width=30, thick=5, gap=2, idle
     made.append(self.pad(s, thick, name=name + "_bridge"))
     # idler bore from plate B's outer face (datum normal -z, pointing out of the part)
     out_b = self._local_datum(name + "_idler_frame", frame, (0, 0, b_top - thick), (0, 0, 180))
-    made.append(self.hole(out_b, at=[(0, 0)], d=idler_d, fit=idler, depth=thick, name=name + "_idler"))
+    made.append(self.hole(out_b, at=[(0, 0)], d=idler_d, fit=idler, depth=thick, horizontal=horizontal,
+                          name=name + "_idler"))
     made += self.mate_to(servo + ".horn", at, access=access, name=name + "_horn")
     return ParamSet({"length": length, "width": width, "thick": thick, "gap": gap, "bridge_x": length + thick,
                      "plate_b_z": b_top - thick, "mid_z": mid_z, "made": made})

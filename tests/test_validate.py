@@ -1,6 +1,9 @@
 """T1.7: pose grid, static loads, plan validator (pure Python) and the L5/L6/L7 gates through the worker."""
+import json
 import math
+from pathlib import Path
 
+import numpy as np
 import pytest
 import trimesh
 
@@ -15,7 +18,8 @@ from validate.poses import grid, joint_sweep, sweep_poses
 from validate.run_tests import evaluate, probe_requests
 from agents.router import route
 from harness.pipeline import JobReport
-from validate.printability import check_mesh, check_print
+from validate.orient import best_orientation, rect_fits
+from validate.printability import check_holes, check_mesh, check_print, fit_table
 from validate.statics import joint_loads
 
 
@@ -183,16 +187,85 @@ def test_check_mesh_rules():
     prof = load_profile()
     info, sigs = check_mesh("ok", trimesh.creation.box((40, 30, 10)), prof)
     assert sigs == [] and info["fits"] and info["min_wall_mm"] == pytest.approx(10, abs=1e-3)
-    _, sigs = check_mesh("big", trimesh.creation.box((190, 20, 20)), prof)
+    _, sigs = check_mesh("big", trimesh.creation.box((260, 20, 20)), prof)
     assert [s.cause for s in sigs if "build volume" in s.cause]
-    _, sigs = check_mesh("diag_ok", trimesh.creation.box((175, 10, 10)), prof)   # fits along any axis
-    assert sigs == []
+    info, sigs = check_mesh("diag_ok", trimesh.creation.box((190, 20, 10)), prof)   # corner to corner on the bed
+    assert sigs == [] and info["fits"]
     _, sigs = check_mesh("thin", trimesh.creation.box((40, 30, 0.8)), prof)
     assert any("walls down to 0.80" in s.cause for s in sigs)
     open_box = trimesh.creation.box((10, 10, 10))
     open_box.update_faces(list(range(len(open_box.faces) - 2)))
     _, sigs = check_mesh("open", open_box, prof)
-    assert any("not a closed solid" in s.cause for s in sigs)
+    assert any("not a closed manifold solid" in s.cause for s in sigs)
+
+
+def _table():
+    """60 x 60 x 5 slab on a 10 x 10 x 40 post (slab on top in the part frame)."""
+    slab = trimesh.creation.box((60, 60, 5))
+    slab.apply_translation((0, 0, 42.5))
+    post = trimesh.creation.box((10, 10, 40))
+    post.apply_translation((0, 0, 20))
+    return trimesh.boolean.union([slab, post])
+
+
+def test_orientation_and_overhang():
+    prof = load_profile()
+    assert rect_fits(20, 190, 180, 180) and not rect_fits(20, 260, 180, 180)
+    b = best_orientation(_table(), prof, [])
+    assert b["name"] == "+z down" and b["support_mm2"] == 0 and b["contact_mm2"] == pytest.approx(3600)
+    rows = {c["name"]: c for c in b["candidates"]}
+    # upright: the slab underside is anchored only within max_bridge / 2 of the post (a 20 x 20 square)
+    assert rows["-z down"]["support_mm2"] == pytest.approx(3600 - 100 - 400, rel=0.05)
+    # on its side the post is a 40 x 10 cantilever: 5 mm of it reach from the slab
+    assert rows["-x down"]["support_mm2"] == pytest.approx(350, abs=1)
+    # a 6 mm horizontal hole bridges; a 30 x 30 pocket ceiling keeps a 20 x 20 centre unsupported
+    hole = trimesh.creation.cylinder(radius=3, height=40, sections=64)
+    hole.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2, (0, 1, 0)))
+    holed = trimesh.boolean.difference([trimesh.creation.box((30, 20, 20)), hole])
+    pocket = trimesh.creation.box((30, 30, 10))
+    pocket.apply_translation((0, 0, -5))
+    cup = trimesh.boolean.difference([trimesh.creation.box((40, 40, 20)), pocket])
+    rows = {c["name"]: c for c in best_orientation(holed, prof, [])["candidates"]}
+    assert rows["-z down"]["support_mm2"] == 0
+    rows = {c["name"]: c for c in best_orientation(cup, prof, [])["candidates"]}
+    assert rows["-z down"]["support_mm2"] == pytest.approx(400, abs=1)
+    # a load path along x keeps a long bar flat; along z it would cost LOAD_LAMBDA_MM per mm
+    bar = trimesh.creation.box((150, 20, 6))
+    assert best_orientation(bar, prof, [("a", (-70, 0, 0)), ("b", (70, 0, 0))])["name"] in ("-z down", "+z down")
+
+
+def test_check_mesh_support_cap():
+    prof = load_profile()
+    _, sigs = check_mesh("table", _table(), prof)                          # prints slab down: no support
+    assert sigs == []
+    # 3-D cross of 60 x 10 x 10 bars: in every orientation the four level arms are 25 mm cantilevers
+    bars = [trimesh.creation.box(e) for e in ((60, 10, 10), (10, 60, 10), (10, 10, 60))]
+    info, sigs = check_mesh("jack", trimesh.boolean.union(bars), prof)
+    o = info["orientation"]
+    assert o["support_mm2"] == pytest.approx(4 * 20 * 10, abs=5)          # 5 mm of each arm reach the hub
+    assert [s.level for s in sigs] == ["failure"] and "of support" in sigs[0].cause
+    assert sigs[0].evidence["cap_mm2"] == pytest.approx(0.15 * o["footprint_mm2"], abs=0.01)
+
+
+def _golden_plan():
+    return json.loads((Path(__file__).resolve().parents[1] / "bench/golden/b1_3/plan.json").read_text(encoding="utf-8"))
+
+
+def test_fit_probe():
+    prof = load_profile()
+    table = fit_table(None, prof)
+    # M2 2.0 = tap_m2 + horizontal extra, M4 4.0 = the insert_m3 hole: both are valid printed holes
+    assert table["bare"] == {2.5: "M2.5", 3.0: "M3", 5.0: "M5"}
+    seat = fit_table(AssemblyPlan.model_validate({**_golden_plan(), "components": [
+        {"id": "b1", "card": "bearing/608zz", "attach_to": "base.servo_mount"}]}), prof)
+    assert seat["bare"][22.0].startswith("b1 seat") and "press b1 seat (bearing/608zz outer_d)" in seat["valid"][22.2]
+    up = {"axis": [0, 0, 1], "center": [0, 0, 0], "length": 5}
+    side = {"axis": [1, 0, 0], "center": [0, 0, 5], "length": 20}
+    sigs = check_holes("p", [{**up, "d": 3.0}, {**up, "d": 3.4}, {**up, "d": 2.7}], np.eye(3), table)
+    assert [s.level for s in sigs] == ["failure"] and "bare M3 nominal" in sigs[0].cause
+    # horizontal on the bed: a clearance fit sags (warning); a tap fit or one with the extra does not
+    sigs = check_holes("p", [{**side, "d": 3.4}, {**side, "d": 2.7}, {**side, "d": 3.6 + 0.2}], np.eye(3), table)
+    assert [s.level for s in sigs] == ["warning"] and sigs[0].evidence["holes"] == [{**side, "d": 3.4}]
 
 
 # ---- worker: interference, reach and printed-mass torque on real parts --------------------------

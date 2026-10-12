@@ -25,6 +25,7 @@ class PrintProfile(BaseModel):
     min_feature_mm: float = Field(gt=0)
     max_overhang_deg: float = Field(gt=0, lt=90)
     max_bridge_mm: float = Field(ge=0)
+    max_support_frac: float = Field(default=0.15, ge=0)
     fits: dict[str, float]
     horizontal_hole_extra_mm: float = Field(ge=0)
     screws: dict[str, ScrewHoles]

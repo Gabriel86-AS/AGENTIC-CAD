@@ -11,6 +11,7 @@ min_wall_mm: 1.2
 min_feature_mm: 0.8
 max_overhang_deg: 45           # from vertical
 max_bridge_mm: 10
+max_support_frac: 0.15       # L7: support area in the best orientation > this x footprint fails (else a warning)
 
 # Hole/fit table read by SDK hole(fit=...). Diametral allowance added to the nominal diameter, mm.
 # Plan §4.2: sliding 0.3 per side, press 0.1, horizontal holes +0.2 (extra, when the axis is horizontal in print orientation).

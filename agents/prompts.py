@@ -85,7 +85,11 @@ intents). The assembly is built from your connectors, so the plan is the contrac
 3. Write each intent as a mini-spec for the part agent: overall shape and key dimensions, where the
    servo body sits in this part's frame (so it can leave clearance), which SDK calls to use (mount,
    electronics_bay, mate_to, servo_u_bracket), clearances to keep from neighbours across the joint range.
-   Parts must fit a 180 x 180 x 180 mm build volume.
+   Parts must fit a 180 x 180 x 180 mm build volume and print with little support (each lies on its
+   flattest side: keep one flat face, avoid floating beams and wide ceilings). A part too long for the
+   build volume becomes two parts `<name>_a` / `<name>_b` joined by a `fixed` joint at a connector
+   `split` (same frame on both halves, z from a into b, label "split"); each half's intent says
+   `split_joint("split", "a"|"b", height=..., by="dovetail"|"screws")`.
 4. Call `check_plan` and fix every failure (tree, DOF, servo ranges, reach, static torque). Pick joint
    limits that keep links off the base and other parts.
 5. Call `submit_plan` with the final plan; it only accepts a plan that passes check_plan. Then stop with a

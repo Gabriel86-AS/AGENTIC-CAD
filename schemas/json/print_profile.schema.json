@@ -97,6 +97,12 @@
       "title": "Max Bridge Mm",
       "type": "number"
     },
+    "max_support_frac": {
+      "default": 0.15,
+      "minimum": 0,
+      "title": "Max Support Frac",
+      "type": "number"
+    },
     "fits": {
       "additionalProperties": {
         "type": "number"

@@ -8,8 +8,8 @@ the plan), from a fixed table. P2 wraps this table with an LLM classifier for am
     assembly L5 overlap / contact / clearance "a <-> b"
                                                CODE for the plan parts among a, b (DESIGN if neither is a part)
     assembly L5 reach (spec or plan.tests), tree; L6 torque   DESIGN
-    print L7 build volume                      DESIGN (split or shorten the part)
-    print L7 other (watertight, thin wall)     CODE <part>
+    print L7 build volume                      DESIGN (split into two parts + fixed joint, or shorten)
+    print L7 other (manifold, support area, thin wall, fits)   CODE <part>
     build / export / description               STOP (pipeline defect, not the agents')
 """
 import re
