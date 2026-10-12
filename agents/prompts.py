@@ -120,7 +120,10 @@ AgenticCAD SDK so that it meets the contract below, then make it compile.
 
 Tools: write_file (only parts/{name}.py; always the full file), read_file (your file, docs/, components/,
 bench/golden/, context/), compile_part (gates L0-L4 + your plan connectors; you have {k} compiles),
-probe_part (read-only measurements of the last compiled model).
+probe_part (read-only measurements of the last compiled model), render_part (images of the last
+compiled model with your connector frames; a few per session, use it to check the shape once it compiles).
+After compile_part passes, a look check (L3v) compares renders of your part with its intent and may send
+you its issues.
 
 Work: write the program, call compile_part, read its signals (cause | location | fix), fix, repeat until
 it reports PASS. Use probe_part when a clearance or position is in doubt. When compile_part passes, stop

@@ -3,6 +3,7 @@ import json
 
 import pytest
 
+from agents import stages
 from bench.runner import cases, run_bench, spec_match, summarize, summary
 from harness import tools as harness_tools
 from test_agents import scripted_backends
@@ -12,6 +13,7 @@ from test_agents import scripted_backends
 def no_flex(monkeypatch):
     """L4 is tested in test_harness_tools / test_golden; here it would only re-flex the golden parts per compile."""
     monkeypatch.setattr(harness_tools, "FLEX", False)
+    monkeypatch.setattr(stages, "LOOK", False)   # L3v needs a judge role; tested in test_vision
 
 
 def test_cases_cover_p1_bench():

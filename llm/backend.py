@@ -5,6 +5,7 @@ Two implementations: AgentSDKBackend (prototype, Claude Agent SDK) and ClaudeAPI
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from llm.tools import ToolSpec
 
@@ -17,6 +18,7 @@ class ToolCall:
     input: dict
     output: str
     is_error: bool
+    images: list[str] = field(default_factory=list)   # PNGs returned with the output (render_part)
 
 
 @dataclass
@@ -39,5 +41,6 @@ class LLMBackend(ABC):
         self.max_turns = max_turns
 
     @abstractmethod
-    def run(self, system: str, prompt: str, tools: list[ToolSpec]) -> RunResult:
-        """Run one agent session with only `tools` available; return the trace."""
+    def run(self, system: str, prompt: str, tools: list[ToolSpec], images: list[Path] | None = None) -> RunResult:
+        """Run one agent session with only `tools` available; return the trace. `images` (PNG paths) go into
+        the first user message after the prompt text (vision gates L3v / L8)."""

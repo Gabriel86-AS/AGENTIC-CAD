@@ -8,7 +8,11 @@ import anthropic
 from anthropic.lib.tools import BetaFunctionTool, ToolError
 
 from llm.backend import LLMBackend, RunResult, ToolCall
-from llm.tools import ToolSpec
+from llm.tools import ToolSpec, image_b64
+
+
+def _image(path) -> dict:
+    return {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": image_b64(path)}}
 
 
 class ClaudeAPIBackend(LLMBackend):
@@ -22,15 +26,15 @@ class ClaudeAPIBackend(LLMBackend):
     @staticmethod
     def adapt(spec: ToolSpec, calls: list[ToolCall]) -> BetaFunctionTool:
         def fn(**kwargs):
-            text, is_error = spec.call(kwargs)
-            calls.append(ToolCall(spec.name, kwargs, text, is_error))
+            text, is_error, images = spec.invoke(kwargs)
+            calls.append(ToolCall(spec.name, kwargs, text, is_error, [str(p) for p in images]))
             if is_error:
                 raise ToolError(text)  # runner returns it with is_error: true
-            return text
+            return [{"type": "text", "text": text}] + [_image(p) for p in images] if images else text
 
         return BetaFunctionTool(fn, name=spec.name, description=spec.description, input_schema=spec.input_schema)
 
-    def run(self, system: str, prompt: str, tools: list[ToolSpec]) -> RunResult:
+    def run(self, system: str, prompt: str, tools: list[ToolSpec], images=None) -> RunResult:
         client = self.client or anthropic.Anthropic()
         calls: list[ToolCall] = []
         res = RunResult(backend=self.name, model=self.model, final_text="", tool_calls=calls)
@@ -38,7 +42,8 @@ class ClaudeAPIBackend(LLMBackend):
             model=self.model,
             max_tokens=self.max_tokens,
             system=system,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": [{"type": "text", "text": prompt}] + [_image(p) for p in images]
+                       if images else prompt}],
             tools=[self.adapt(s, calls) for s in tools],
             max_iterations=self.max_turns,
         )

@@ -1,0 +1,54 @@
+{
+  "$defs": {
+    "LookIssue": {
+      "additionalProperties": false,
+      "properties": {
+        "severity": {
+          "enum": [
+            "major",
+            "minor"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "where": {
+          "minLength": 1,
+          "title": "Where",
+          "type": "string"
+        },
+        "what": {
+          "minLength": 1,
+          "title": "What",
+          "type": "string"
+        }
+      },
+      "required": [
+        "severity",
+        "where",
+        "what"
+      ],
+      "title": "LookIssue",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "L3v: does the rendered part match its intent? matches_intent is false iff some issue is major.",
+  "properties": {
+    "matches_intent": {
+      "title": "Matches Intent",
+      "type": "boolean"
+    },
+    "issues": {
+      "items": {
+        "$ref": "#/$defs/LookIssue"
+      },
+      "title": "Issues",
+      "type": "array"
+    }
+  },
+  "required": [
+    "matches_intent"
+  ],
+  "title": "LookVerdict",
+  "type": "object"
+}

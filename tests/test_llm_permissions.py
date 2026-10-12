@@ -125,7 +125,7 @@ def test_claude_api_backend_tool_loop_offline(ws):
     assert res.error is None and res.final_text == "done" and res.turns == 4
     assert [(c.name, c.is_error) for c in res.tool_calls] == [
         ("write_file", False), ("write_file", True), ("compile_part", False)]
-    assert {t["name"] for t in sent[0]["tools"]} == {"read_file", "write_file", "compile_part", "probe_part"}
+    assert {t["name"] for t in sent[0]["tools"]} == {"read_file", "write_file", "compile_part", "probe_part", "render_part"}
     # the denial reached the model as an error tool_result
     denial = [b for m in sent[2]["messages"] if m["role"] == "user" and isinstance(m["content"], list)
               for b in m["content"] if b.get("type") == "tool_result" and b.get("tool_use_id") == "t2"]

@@ -134,7 +134,11 @@ def run(prompt: str, job_dir: Path, backends: stages.Backends, approve: Approve 
                 st["compiles"] += o.compiles
                 st["escalations"] += int(o.escalated)
                 st["ok"] = o.ok
-                log("   %s: %s after %d compiles%s" % (n, "PASS" if o.ok else "FAIL", o.compiles, " (escalated)" if o.escalated else ""))
+                if o.look:
+                    st["look"] = o.look
+                log("   %s: %s after %d compiles%s%s" % (n, "PASS" if o.ok else "FAIL", o.compiles,
+                                                     " (escalated)" if o.escalated else "",
+                                                     ", L3v %s" % o.look["status"] if o.look else ""))
         if res.rounds >= b.max_rounds:
             return finish("fail", "pipeline round budget exhausted", last)
         res.rounds += 1

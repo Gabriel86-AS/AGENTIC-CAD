@@ -12,7 +12,7 @@ from typing import Callable
 
 from pydantic import ValidationError
 
-from agents import prompts
+from agents import look, prompts
 from agents.context import part_excerpt
 from agents.trace import Trace
 from components.card import card_ids, load_card
@@ -24,7 +24,7 @@ from schemas.signal import Signal
 from validate.plan_check import PlanReport, check_plan
 
 ROOT = Path(__file__).resolve().parents[1]
-Backends = Callable[[str], LLMBackend]   # role: "requirements" | "design" | "part" | "part_escalated"
+Backends = Callable[[str], LLMBackend]   # role: "requirements" | "design" | "part" | "part_escalated" | "look"
 DEFAULT_GENERIC_BAY = "electronics/generic_bay"
 DEFAULT_SERVO = "servo/mg996r"
 _COMPILE_LOG = threading.Lock()   # parallel part agents append to one compiles.jsonl
@@ -163,6 +163,9 @@ def _reader(roots: list[Path]):
 
 
 # ---- part agents -------------------------------------------------------------------------------
+LOOK = True   # L3v after a passing compile; tests that are not about L3v switch it off (monkeypatch)
+
+
 @dataclass
 class PartOutcome:
     part: str
@@ -172,28 +175,26 @@ class PartOutcome:
     escalated: bool = False
     feedback: str = ""
     runs: list[RunResult] = field(default_factory=list)
+    look: dict = field(default_factory=dict)   # L3v: {status: pass | warning | skipped, rounds, issues, reason}
 
 
 def part_agent(plan: AssemblyPlan, name: str, job_dir: Path, backends: Backends, trace: Trace,
-               feedback: list[dict] | None = None, k: int = 5, escalate: bool = True) -> PartOutcome:
-    """≤ K compiles with the part model; if it still fails, one more session on the escalation model."""
+               feedback: list[dict] | None = None, k: int = 5, escalate: bool = True, look_rounds: int = 2) -> PartOutcome:
+    """≤ K compiles with the part model; if it still fails, one more session on the escalation model.
+    A passing part then goes through L3v: ≤ look_rounds judge calls with one repair session between them."""
     ctx = job_dir / "context"
     ctx.mkdir(parents=True, exist_ok=True)
     excerpt = part_excerpt(plan, name)
     (ctx / f"{name}.md").write_text(excerpt, encoding="utf-8")
     out = PartOutcome(name, False)
-    roles = ["part"] + (["part_escalated"] if escalate else [])
-    for role in roles:
+
+    def session(role: str, extra: str):
         ws = PartWorkspace(job_dir, name, read_roots=[ctx, ROOT / "docs", ROOT / "components", ROOT / "bench" / "golden"],
                            plan=plan, max_compiles=k)
         prompt = prompts.PART_PROMPT.format(name=name)
         if ws.own.exists():
             prompt += "\nparts/%s.py already exists from an earlier attempt; read it and repair it." % name
-        if feedback:
-            prompt += "\nThe assembled design failed these checks involving your part; fix them:\n```json\n%s\n```" % (
-                json.dumps(feedback, indent=1))
-        if out.feedback and role == "part_escalated":
-            prompt += "\nThe previous attempt ended with:\n%s" % out.feedback
+        prompt += extra
         res = backends(role).run(prompts.part_system(name, excerpt, k), prompt, ws.tools())
         trace.session("part:%s%s" % (name, ":escalated" if role != "part" else ""), res, prompt)
         out.sessions += 1
@@ -204,10 +205,68 @@ def part_agent(plan: AssemblyPlan, name: str, job_dir: Path, backends: Backends,
                 if e["tool"] == "compile_part" and e["outcome"] != "denied":
                     f.write(json.dumps({"part": name, "role": role, "ok": e["outcome"] == "ok", "gates": e["gates"],
                                         "n_sketches": e["n_sketches"], "n_dof0": e["n_dof0"]}) + "\n")
-        out.escalated = role != "part"
         final = harness_tools.compile_part(ws.own, ws.io, out=ws.fcstd, part=name, plan=plan) if ws.own.exists() else None
         out.ok = bool(final and final.ok)
         out.feedback = final.feedback if final else "parts/%s.py was never written" % name
+        return ws, final
+
+    roles = ["part"] + (["part_escalated"] if escalate else [])
+    for role in roles:
+        extra = ""
+        if feedback:
+            extra += "\nThe assembled design failed these checks involving your part; fix them:\n```json\n%s\n```" % (
+                json.dumps(feedback, indent=1))
+        if out.feedback and role == "part_escalated":
+            extra += "\nThe previous attempt ended with:\n%s" % out.feedback
+        ws, final = session(role, extra)
+        out.escalated = role != "part"
         if out.ok:
             break
+    if out.ok and LOOK and look_rounds > 0:
+        _look_rounds(plan, name, job_dir, backends, trace, ws, final, session, out, look_rounds)
     return out
+
+
+def _look_rounds(plan, name, job_dir, backends, trace, ws, final, session, out: PartOutcome, rounds: int):
+    """L3v on an accepted candidate. Never turns a deterministic pass into a failure: a repair that breaks the
+    compile is rolled back to the passing program, and a second disagreement is a warning."""
+    from validate.render import render_part   # PyVista import is slow; only L3v pays it
+    h = look.history(job_dir, name)
+    last = h["rounds"][-1] if h["rounds"] else None
+    if last and last["source"] == look.source_hash(ws.own) and last.get("matches_intent"):
+        out.look = {"status": "pass", "rounds": 0, "cached": True}
+        return
+    for i in range(rounds):
+        src = look.source_hash(ws.own)
+        pngs, _ = render_part(ws.fcstd, final.report["connectors"], ws.io, job_dir / "renders" / name / "look", name=name)
+        if not pngs:
+            out.look = {"status": "skipped", "rounds": i, "reason": "render failed"}
+            return
+        lk = look.judge(plan, name, list(pngs.values()), final.report, backends("look"), trace)
+        v = lk.verdict
+        look.record(job_dir, name, {"source": src, "matches_intent": v.matches_intent if v else None,
+                                    "issues": [x.model_dump() for x in v.issues] if v else [], "error": lk.error,
+                                    "renders": [str(p) for p in pngs.values()]})
+        if v is None:     # a judge that cannot answer does not hold the part back
+            out.look = {"status": "skipped", "rounds": i + 1, "reason": lk.error}
+            return
+        issues = [x.model_dump() for x in v.issues]
+        if v.matches_intent:
+            out.look = {"status": "pass", "rounds": i + 1, "issues": issues}
+            return
+        if i == rounds - 1:
+            out.look = {"status": "warning", "rounds": i + 1, "issues": issues,
+                        "reason": "look check still disagrees after %d rounds; accepted (L3v never blocks)" % rounds}
+            return
+        good = ws.own.read_text(encoding="utf-8")
+        ws, again = session("part", "\nYour part compiles, but the look check (L3v: a vision model looking at renders "
+                                    "of it) reports these issues against your contract:\n```json\n%s\n```\nFix the "
+                                    "real ones and keep compile_part passing." % json.dumps(look.feedback(v), indent=1))
+        if again is None or not again.ok:
+            ws.own.write_text(good, encoding="utf-8")
+            final = harness_tools.compile_part(ws.own, ws.io, out=ws.fcstd, part=name, plan=plan)
+            out.ok, out.feedback = final.ok, final.feedback
+            out.look = {"status": "warning", "rounds": i + 1, "issues": issues,
+                        "reason": "the L3v repair broke the compile; kept the passing program"}
+            return
+        final = again

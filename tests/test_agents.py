@@ -29,6 +29,12 @@ def no_flex(monkeypatch):
     monkeypatch.setattr(harness_tools, "FLEX", False)
 
 
+@pytest.fixture(autouse=True)
+def no_look(monkeypatch):
+    """L3v has its own tests (test_look_*); the scripted jobs below would need a judge for every part."""
+    monkeypatch.setattr(stages, "LOOK", False)
+
+
 def golden_plan(**over) -> AssemblyPlan:
     return AssemblyPlan.model_validate({**PLAN, **over})
 
@@ -123,7 +129,8 @@ class Scripted(LLMBackend):
         super().__init__(model="scripted-" + role)
         self.script = script
 
-    def run(self, system, prompt, tools):
+    def run(self, system, prompt, tools, images=None):
+        self.images = images
         calls = []
         by = {t.name: t for t in tools}
 

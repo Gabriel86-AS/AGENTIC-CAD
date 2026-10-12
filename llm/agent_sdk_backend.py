@@ -27,7 +27,7 @@ from claude_agent_sdk import (
 )
 
 from llm.backend import LLMBackend, RunResult, ToolCall
-from llm.tools import ToolSpec
+from llm.tools import ToolSpec, image_b64
 
 SERVER = "agenticcad"
 # Belt and braces: names that must never be callable even if a preset re-enabled them
@@ -56,6 +56,19 @@ def make_guard(allowed: set[str], denied: list[str]):
     return guard
 
 
+def sdk_tool(spec: ToolSpec, calls: list[ToolCall]):
+    """One ToolSpec as an in-process MCP tool; images (render_part) become MCP image content after the text."""
+    @tool(spec.name, spec.description, spec.input_schema)
+    async def handler(args):
+        text, is_error, images = await asyncio.to_thread(spec.invoke, args)
+        calls.append(ToolCall(spec.name, dict(args), text, is_error, [str(p) for p in images]))
+        return {"content": [{"type": "text", "text": text}] + [
+            {"type": "image", "data": image_b64(p), "mimeType": "image/png"} for p in images],
+            "is_error": is_error}
+
+    return handler
+
+
 class AgentSDKBackend(LLMBackend):
     name = "agent_sdk"
 
@@ -65,16 +78,7 @@ class AgentSDKBackend(LLMBackend):
         self.max_budget_usd = max_budget_usd
 
     def options(self, system, tools: list[ToolSpec], calls: list[ToolCall], denied: list[str]):
-        def wrap(spec: ToolSpec):
-            @tool(spec.name, spec.description, spec.input_schema)
-            async def handler(args):
-                text, is_error = await asyncio.to_thread(spec.call, args)
-                calls.append(ToolCall(spec.name, dict(args), text, is_error))
-                return {"content": [{"type": "text", "text": text}], "is_error": is_error}
-
-            return handler
-
-        server = create_sdk_mcp_server(SERVER, tools=[wrap(s) for s in tools])
+        server = create_sdk_mcp_server(SERVER, tools=[sdk_tool(s, calls) for s in tools])
         allowed = {mcp_name(s) for s in tools}
         return ClaudeAgentOptions(
             system_prompt=system,
@@ -93,7 +97,14 @@ class AgentSDKBackend(LLMBackend):
             cwd=self.cwd,
         )
 
-    async def _run(self, system: str, prompt: str, tools: list[ToolSpec]) -> RunResult:
+    @staticmethod
+    async def _with_images(prompt: str, images):
+        """Streaming-input prompt: one user message, text then the images (the string form takes no images)."""
+        yield {"type": "user", "parent_tool_use_id": None, "session_id": "default", "message": {"role": "user", "content": [
+            {"type": "text", "text": prompt}] + [{"type": "image", "source": {"type": "base64", "media_type": "image/png",
+                                                                              "data": image_b64(p)}} for p in images]}}
+
+    async def _run(self, system: str, prompt: str, tools: list[ToolSpec], images=None) -> RunResult:
         calls: list[ToolCall] = []
         denied: list[str] = []
         res = RunResult(backend=self.name, model=self.model, final_text="", tool_calls=calls, denied_tools=denied)
@@ -104,7 +115,7 @@ class AgentSDKBackend(LLMBackend):
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(system)
         try:
-            async for msg in query(prompt=prompt, options=self.options({"type": "file", "path": path}, tools, calls, denied)):
+            async for msg in query(prompt=self._with_images(prompt, images) if images else prompt, options=self.options({"type": "file", "path": path}, tools, calls, denied)):
                 if isinstance(msg, AssistantMessage):
                     for block in msg.content:
                         if isinstance(block, TextBlock):
@@ -121,5 +132,5 @@ class AgentSDKBackend(LLMBackend):
         res.final_text = texts[-1] if texts else ""
         return res
 
-    def run(self, system: str, prompt: str, tools: list[ToolSpec]) -> RunResult:
-        return asyncio.run(self._run(system, prompt, tools))
+    def run(self, system: str, prompt: str, tools: list[ToolSpec], images=None) -> RunResult:
+        return asyncio.run(self._run(system, prompt, tools, images))

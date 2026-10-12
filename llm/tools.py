@@ -5,8 +5,11 @@ PartWorkspace is the restricted action space of one part agent (plan §3.4):
   write_file    ONLY parts/<own>.py; anything else raises ToolDenied
   compile_part  gates L0-L4 on parts/<own>.py (harness/tools.py) and returns formatted feedback
   probe_part    read-only measurement snippet against the last compiled model
+  render_part   4 PNG views of the last compiled model with its connector frames (validate/render.py),
+                returned as images; at most `max_renders` per session (renders cost tokens)
 The path checks live here, not in the backends, so both backends enforce the same rule.
 """
+import base64
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,20 +26,39 @@ class ToolDenied(Exception):
 
 
 @dataclass
+class WithImages:
+    """A tool output that carries images (render_part): `data` goes to the model as JSON text, `images` (PNG
+    paths) as image blocks after it. Plain return values are text only."""
+    data: Any
+    images: list[Path] = field(default_factory=list)
+
+
+def image_b64(path: Path) -> str:
+    return base64.b64encode(Path(path).read_bytes()).decode("ascii")
+
+
+@dataclass
 class ToolSpec:
     name: str
     description: str
     input_schema: dict
     fn: Callable[[dict], Any]
 
-    def call(self, args: dict) -> tuple[str, bool]:
-        """Run the tool; return (text for the model, is_error). Never raises."""
+    def invoke(self, args: dict) -> tuple[str, bool, list[Path]]:
+        """Run the tool; return (text for the model, is_error, PNG paths to attach). Never raises."""
         try:
-            return json.dumps(self.fn(args), default=str), False
+            out = self.fn(args)
+            if isinstance(out, WithImages):
+                return json.dumps(out.data, default=str), False, [Path(p) for p in out.images]
+            return json.dumps(out, default=str), False, []
         except ToolDenied as e:
-            return json.dumps({"error": "denied", "detail": str(e)}), True
+            return json.dumps({"error": "denied", "detail": str(e)}), True, []
         except Exception as e:  # tool bug or bad input: report to the model, keep the session alive
-            return json.dumps({"error": type(e).__name__, "detail": str(e)}), True
+            return json.dumps({"error": type(e).__name__, "detail": str(e)}), True, []
+
+    def call(self, args: dict) -> tuple[str, bool]:
+        text, is_error, _ = self.invoke(args)
+        return text, is_error
 
 
 @dataclass
@@ -48,8 +70,11 @@ class PartWorkspace:
     plan: AssemblyPlan | None = None  # params, components and this part's PartSpec for the gates
     max_compiles: int | None = None   # K (plan §4.4): compile_part calls allowed in this session
     log: list[dict] = field(default_factory=list)  # every call, allowed or not (trace + tests)
+    max_renders: int | None = 3
     compiles: int = 0
+    renders: int = 0
     last_compile_ok: bool = False
+    last_report: dict | None = None
 
     def __post_init__(self):
         self.root = Path(self.root).resolve()
@@ -100,6 +125,7 @@ class PartWorkspace:
         res = harness_tools.compile_part(self.own, self.io, out=self.fcstd, part=self.part, plan=self.plan,
                                          timeout_s=self.timeout_s)
         self.last_compile_ok = res.ok
+        self.last_report = res.report
         self._record("compile_part", args, "ok" if res.ok else "failure")
         sk = (res.report or {}).get("sketches") or {}
         self.log[-1].update(gates=sorted({s.gate for s in res.signals if s.level == "failure"}),
@@ -116,6 +142,32 @@ class PartWorkspace:
         res = harness_tools.probe_part(self.fcstd, args["snippet"], self.io)
         self._record("probe_part", args, "ok" if res.ok else "failure")
         return res.for_agent()
+
+    def render_part(self, args: dict) -> WithImages:
+        from validate.render import VIEWS, render_part   # PyVista import is slow; only render sessions pay it
+        if not self.fcstd.exists():
+            self._record("render_part", args, "denied")
+            raise ToolDenied("no compiled model to render; call compile_part first (it must get past L0/L1)")
+        if self.max_renders is not None and self.renders >= self.max_renders:
+            self._record("render_part", args, "denied")
+            raise ToolDenied(f"render budget of {self.max_renders} used up; use probe_part to measure instead")
+        views = args.get("views") or list(VIEWS)
+        bad = [v for v in views if v not in VIEWS]
+        if bad:
+            self._record("render_part", args, "denied")
+            raise ToolDenied(f"unknown views {bad}; choose from {list(VIEWS)}")
+        self.renders += 1
+        conns = (self.last_report or {}).get("connectors")
+        if conns is None and self.plan and self.plan.part(self.part):
+            conns = {c.name: {"o": c.o, "z": c.z, "x": c.x} for c in self.plan.part(self.part).connectors}
+        pngs, sigs = render_part(self.fcstd, conns or {}, self.io, self.root / "renders" / self.part,
+                                 name=self.part, views=views)
+        self._record("render_part", args, "ok" if pngs else "failure")
+        if not pngs:
+            return WithImages({"ok": False, "feedback": "; ".join(s.cause for s in sigs) or "meshing failed"})
+        return WithImages({"ok": True, "views": list(pngs), "legend": "part frame; connector axes x red, y green, "
+                           "z blue, labelled at the z tip; corner triad = part axes; parallel projection"},
+                          list(pngs.values()))
 
     def tools(self) -> list[ToolSpec]:
         return [
@@ -139,4 +191,10 @@ class PartWorkspace:
                                    "segments(p0, p1), thickness(p, direction), help(). Points in mm, part frame.",
                      {"type": "object", "properties": {"snippet": {"type": "string"}}, "required": ["snippet"]},
                      self.probe_part),
+            ToolSpec("render_part", "Render the last compiled model (read-only) as images: views iso, iso_back, "
+                                    "front, top (default all) with your connector frames drawn as RGB axes. Costs "
+                                    "tokens: use it to check the overall shape once it compiles, not every turn.",
+                     {"type": "object", "properties": {"views": {"type": "array", "items": {
+                         "type": "string", "enum": ["iso", "iso_back", "front", "top"]}}}},
+                     self.render_part),
         ]
