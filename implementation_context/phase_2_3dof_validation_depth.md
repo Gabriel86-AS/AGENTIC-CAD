@@ -120,7 +120,7 @@ Configs: `sonnet_only`, `opus_only`, `routed` (plan §2.3). Report per slice: su
 | T2.11 | Recalibrate plan-level L6 densities from real masses | P1 data |
 
 ## 6. Exit criteria
-- [ ] 3-DOF golden passes all gates at 200 mm / 50 g.
+- [x] 3-DOF golden passes all gates at 200 mm / 50 g (T2.9, `bench/golden/arm3`, 2026-10-12; live L3v + L8 pass).
 - [ ] Bench v1 `routed`: ≥ 70 % success manipulator slices, ≥ 60 % mechanisms + core-only (initial bar; tune after first run).
 - [ ] L4 pass rate reported; no accepted part fails L4.
 - [ ] Routing decision made (keep `routed` or change defaults) with cost numbers.

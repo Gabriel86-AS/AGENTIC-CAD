@@ -1,4 +1,4 @@
-# Manipulator pack — design notes (P1, static; goes straight into the prompts)
+# Manipulator pack — design notes (P1 + P2 3-DOF, static; goes straight into the prompts)
 
 ## A. Requirement analysis (requirements + resolver agents)
 
@@ -27,6 +27,19 @@ Each servo carried by the shoulder adds 55 g at its distance: an elbow servo at 
   side of the upper arm, horn toward the forearm.
 - Pan-tilt: pan servo vertical in the base, tilt servo on a turret; the payload plate is a `servo_u_bracket`
   on the tilt horn (the bracket's bridge carries the camera mount).
+
+**Typical proportions (3-DOF yaw + shoulder + elbow; golden `bench/golden/arm3`, 200 mm / 50 g)**
+- Upper arm ≈ forearm ≈ reach / 2 (100 + 105 mm); shoulder 0.21 / 0.54 N·m, elbow 0.06 / 0.54 N·m.
+- Upper arm = shoulder `servo_u_bracket` + short beam + a spine (plate across the link) joining, at the elbow,
+  a wall the elbow servo's flange rests on (shaft parallel to the shoulder) and a lug under the forearm
+  bracket's idler plate. Keep the wall within radius `length − 5` of the elbow axis on the +x side: the
+  forearm bracket's bridge sweeps there. Everything flush with one bracket edge so the link prints on its side.
+- Idlers: put the 623ZZ (`bearing_seat`, plan component) in the holder's lug, bracket idler `tap_m3`: the M3
+  screw threads into the bracket and turns in the bearing.
+- With the 180 mm generic build volume a turntable (Ø ≈ 99) and the generic bay (85 × 70) fit one plate only
+  with the bay turned 90° (frame x across the plate). Put the bay **behind** the yaw axis (−x): with yaw ±90°
+  the arm only sweeps the +x half, so a bay in front gets hit when the forearm reaches down.
+- Limits: shoulder [−1.57, 0.2], elbow [−1.57, 0.5] keep the tool at about table height at the lowest pose.
 
 ## B. Component and connector analysis (design agent)
 

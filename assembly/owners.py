@@ -2,8 +2,8 @@
 build_assembly and sweep_assembly).
 
 Each owner is one App::Part: a compiled part's container, a card model's container, or (cards without a
-generator) an envelope App::Part made in `host` with one LCS per card connector and a box for
-`interfaces.volume`. Connector frames are read from the LCS placements (owner frame, mm).
+generator) an envelope App::Part made in `host` with one LCS per card connector and a box (or a cylinder, `shape:
+cylinder`) for `interfaces.volume`. Connector frames are read from the LCS placements (owner frame, mm).
 """
 import os
 
@@ -40,7 +40,7 @@ def _is_identity(t, tol=1e-9):
 
 
 def envelope(host, cid, card):
-    """App::Part with one LCS per card connector and a box for interfaces.volume (if the card has one).
+    """App::Part with one LCS per card connector and a box (cylinder with shape: cylinder) for interfaces.volume.
     `host` is an Assembly (newObject) or a document (addObject)."""
     new = host.addObject if isinstance(host, App.Document) else host.newObject
     part = new("App::Part", cid)
@@ -53,9 +53,14 @@ def envelope(host, cid, card):
     if vol:
         v = resolve(card, vol)
         (cx, cy), (l, w, h) = v["centre_xy"], v["size"]
-        box = part.newObject("Part::Box", cid + "_envelope")
-        box.Length, box.Width, box.Height = l, w, h
-        box.Placement = App.Placement(App.Vector(cx - l / 2, cy - w / 2, v.get("bottom_z", 0)), App.Rotation())
+        if v.get("shape") == "cylinder":                    # round cards (bearings): diameter l along z
+            cyl = part.newObject("Part::Cylinder", cid + "_envelope")
+            cyl.Radius, cyl.Height = l / 2, h
+            cyl.Placement = App.Placement(App.Vector(cx, cy, v.get("bottom_z", 0)), App.Rotation())
+        else:
+            box = part.newObject("Part::Box", cid + "_envelope")
+            box.Length, box.Width, box.Height = l, w, h
+            box.Placement = App.Placement(App.Vector(cx - l / 2, cy - w / 2, v.get("bottom_z", 0)), App.Rotation())
     return part
 
 
@@ -65,11 +70,11 @@ def lcs_names(container):
 
 
 def owner_shape(container):
-    """Solids of an owner in its own frame (bodies and envelope boxes; datums and LCS excluded), or None.
+    """Solids of an owner in its own frame (bodies and envelope boxes / cylinders; datums and LCS excluded), or None.
     A feature's .Shape excludes the parent App::Part placement (D21), so this is the owner frame."""
     solids = []
     for o in container.Group:
-        if o.TypeId in ("PartDesign::Body", "Part::Box") and not o.Shape.isNull():
+        if o.TypeId in ("PartDesign::Body", "Part::Box", "Part::Cylinder") and not o.Shape.isNull():
             solids.extend(o.Shape.Solids)
     return OCC.makeCompound(solids) if solids else None
 

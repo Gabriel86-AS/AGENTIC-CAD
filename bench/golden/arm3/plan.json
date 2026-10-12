@@ -1,0 +1,81 @@
+{
+  "units": "mm",
+  "ground": "base",
+  "dof": 3,
+  "requirements": {
+    "pack": "manipulator",
+    "dof": 3,
+    "reach_mm": 200,
+    "payload_g": 50,
+    "components_requested": ["servo/mg996r"],
+    "electronics": "generic",
+    "material": "PETG"
+  },
+  "params": {
+    "upper_len": {"value": 100, "min": 90, "max": 140, "unit": "mm"},
+    "fore_len": {"value": 105, "min": 80, "max": 150, "unit": "mm"}
+  },
+  "components": [
+    {"id": "s_yaw", "card": "servo/mg996r", "attach_to": "base.servo_mount"},
+    {"id": "s_sh", "card": "servo/mg996r", "attach_to": "turret.sh_mount"},
+    {"id": "b_sh", "card": "bearing/623zz", "attach_to": "turret.sh_bearing"},
+    {"id": "s_el", "card": "servo/mg996r", "attach_to": "upper_arm.el_mount"},
+    {"id": "b_el", "card": "bearing/623zz", "attach_to": "upper_arm.el_bearing"},
+    {"id": "ebay", "card": "electronics/generic_bay", "attach_to": "base.ebay_mount"}
+  ],
+  "parts": [
+    {
+      "name": "base",
+      "intent": "ground plate with the yaw servo standing in a roller turntable (3 x 623ZZ), the electronics bay behind it and M3 tie-down holes at the corners, away from the arm's +x sweep",
+      "connectors": [
+        {"name": "servo_mount", "o": [-10, 0, 29.3], "z": [0, 0, 1], "x": [1, 0, 0], "label": "servo_mount"},
+        {"name": "ebay_mount", "o": [-87, 0, 5], "z": [0, 0, 1], "x": [0, 1, 0], "label": "ebay_mount"}
+      ]
+    },
+    {
+      "name": "turret",
+      "intent": "yaw-driven disc riding on the turntable rollers, holding the shoulder servo (axis +y) in a wall and a lug with the 623ZZ idler bearing for the upper arm's U bracket",
+      "connectors": [
+        {"name": "horn_seat", "o": [0, 0, 0], "z": [0, 0, 1], "x": [1, 0, 0], "label": "servo_horn_face"},
+        {"name": "sh_mount", "o": [-10, 12, 40], "z": [0, 1, 0], "x": [1, 0, 0], "label": "servo_mount"},
+        {"name": "sh_bearing", "o": [0, -27, 40], "z": [0, 1, 0], "x": [1, 0, 0], "label": "bearing_seat"}
+      ]
+    },
+    {
+      "name": "upper_arm",
+      "intent": "shoulder U bracket + beam to the elbow, where a wall holds the elbow servo (axis parallel to the shoulder) and a lug carries the 623ZZ idler bearing for the forearm's U bracket",
+      "connectors": [
+        {"name": "horn_seat", "o": [0, 0, 0], "z": [0, 0, 1], "x": [1, 0, 0], "label": "servo_horn_face"},
+        {"name": "el_mount", "o": [90, 0, -12], "z": [0, 0, 1], "x": [1, 0, 0], "label": "servo_mount"},
+        {"name": "el_bearing", "o": [100, 0, -51], "z": [0, 0, 1], "x": [1, 0, 0], "label": "bearing_seat"}
+      ]
+    },
+    {
+      "name": "forearm",
+      "intent": "elbow U bracket + beam to the tool, with two M3 taps in the end face for a tool",
+      "connectors": [
+        {"name": "horn_seat", "o": [0, 0, 0], "z": [0, 0, 1], "x": [1, 0, 0], "label": "servo_horn_face"},
+        {"name": "tool", "o": [105, -9, -21.95], "z": [1, 0, 0], "x": [0, 0, 1], "label": "tool"}
+      ]
+    }
+  ],
+  "joints": [
+    {"name": "j_yaw", "type": "revolute", "parent": "s_yaw.horn", "child": "turret.horn_seat", "driver": "s_yaw",
+     "limits": {"lower": -1.57, "upper": 1.57}},
+    {"name": "j_shoulder", "type": "revolute", "parent": "s_sh.horn", "child": "upper_arm.horn_seat", "driver": "s_sh",
+     "limits": {"lower": -1.57, "upper": 0.2}},
+    {"name": "j_elbow", "type": "revolute", "parent": "s_el.horn", "child": "forearm.horn_seat", "driver": "s_el",
+     "limits": {"lower": -1.57, "upper": 0.5}}
+  ],
+  "tests": [
+    {"expect": "contact", "a": "s_yaw", "b": "base", "near": "base.servo_mount"},
+    {"expect": "contact", "a": "s_sh", "b": "turret", "near": "turret.sh_mount"},
+    {"expect": "contact", "a": "s_el", "b": "upper_arm", "near": "upper_arm.el_mount"},
+    {"expect": "contact", "a": "b_sh", "b": "turret", "near": "turret.sh_bearing"},
+    {"expect": "contact", "a": "b_el", "b": "upper_arm", "near": "upper_arm.el_bearing"},
+    {"expect": "clearance", "a": "upper_arm", "b": "turret", "min_mm": 1.0, "over_joint": "j_shoulder", "samples": 9},
+    {"expect": "clearance", "a": "forearm", "b": "upper_arm", "min_mm": 1.0, "over_joint": "j_elbow", "samples": 9},
+    {"expect": "clearance", "a": "forearm", "b": "base", "min_mm": 3.0},
+    {"expect": "reach", "op": ">=", "value_mm": 200}
+  ]
+}

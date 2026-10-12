@@ -22,6 +22,6 @@ connectors:
 interfaces:
   seat:   { outer_d: outer_d, depth: width, lip_d: housing_shoulder_d }
   bore:   { d: bore_d, shoulder_d: shaft_shoulder_d }
-  volume: { centre_xy: [0, 0], size: [outer_d, outer_d, width], bottom_z: 0 }   # L5 envelope
+  volume: { centre_xy: [0, 0], size: [outer_d, outer_d, width], bottom_z: 0, shape: cylinder }   # L5 envelope (round)
 
 model: null

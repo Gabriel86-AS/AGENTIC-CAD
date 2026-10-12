@@ -21,7 +21,9 @@ def no_flex(monkeypatch):
 
 def test_cases_cover_p1_bench():
     cs = cases()
-    assert [c["id"] for c in cs] == ["B1-1", "B1-2", "B1-3", "B1-4", "B1-5", "B1-6", "B1-7"]
+    # pack cases (manipulator B1-1..5, mechanisms M2-1..8, T2.8), then the core-only ones
+    assert [c["id"] for c in cs] == (["B1-%d" % i for i in range(1, 6)] + ["M2-%d" % i for i in range(1, 9)]
+                                     + ["B1-6", "B1-7"])
     assert {c["id"]: c["group"] for c in cs}["B1-6"] == "core" and cs[0]["pack"] == "manipulator"
     assert all(c["prompt"] and "dof" in c["spec"] for c in cs)
 
