@@ -44,6 +44,9 @@ class JobReport:
     package: str | None = None
     urdf: str | None = None
     elapsed_s: float = 0.0
+    frames: dict = field(default_factory=dict)     # L5 check: built connector frames, mounts, owner props (L8 views)
+    mounts: dict = field(default_factory=dict)
+    owners: dict = field(default_factory=dict)
 
     def summary(self) -> dict:
         return {"ok": self.ok, "failed_stage": self.failed_stage, "elapsed_s": self.elapsed_s,
@@ -89,6 +92,7 @@ def run_job(job_dir: Path, out_dir: Path | None = None, robot: str | None = None
         return done()
 
     ac = check_assembly(plan, rep.fcstd, io)
+    rep.frames, rep.mounts, rep.owners = ac.frames, ac.mounts, ac.owners
     if not stage("assembly", ac.ok, ac.signals, ac.feedback, reach_mm=ac.reach_mm, torques=ac.torques,
                  masses=ac.masses, collisions=ac.collisions, clearances=ac.clearances, tests=ac.tests,
                  n_poses=ac.n_poses):

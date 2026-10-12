@@ -4,12 +4,13 @@ from pathlib import Path
 
 from schemas.plan import AssemblyPlan, Spec
 from schemas.profile import PrintProfile
-from schemas.review import LookVerdict
+from schemas.review import LookVerdict, ReviewVerdict
 from schemas.signal import Signal, TraceEvent
 
 OUT = Path(__file__).resolve().parent / "json"
 MODELS = {"spec": Spec, "assembly_plan": AssemblyPlan, "signal": Signal, "trace_event": TraceEvent,
-          "print_profile": PrintProfile, "look_verdict": LookVerdict}
+          "print_profile": PrintProfile, "look_verdict": LookVerdict,
+          "review_verdict": ReviewVerdict}
 
 
 def render() -> dict[str, str]:

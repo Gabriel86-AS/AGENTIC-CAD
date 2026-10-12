@@ -1,7 +1,7 @@
 """CLI: uv run python -m agents run "<prompt>" [--yes] [--job jobs/<id>] [--no-description]
 
 Model routing (plan §2.3): Opus for requirements and design, Sonnet for part agents with one escalation
-to Opus; Sonnet for the L3v look check. Backend: the Agent SDK on the user's subscription (D4); --backend api for the Claude API.
+to Opus; Sonnet for the L3v look check; Opus for the L8 review. Backend: the Agent SDK on the user's subscription (D4); --backend api for the Claude API.
 """
 import argparse
 import sys
@@ -12,7 +12,8 @@ from agents.job import Budgets, run, slug
 
 OPUS, SONNET = "claude-opus-5-5", "claude-sonnet-5-5"
 ROLES = {"requirements": (OPUS, 8, 1.0), "design": (OPUS, 40, 5.0), "part": (SONNET, 30, 2.0),
-         "part_escalated": (OPUS, 30, 3.0), "look": (SONNET, 4, 0.5)}   # model, max turns, per-session budget (USD, Agent SDK only)
+         "part_escalated": (OPUS, 30, 3.0), "look": (SONNET, 4, 0.5),
+         "review": (OPUS, 4, 1.5)}   # model, max turns, per-session budget (USD, Agent SDK only)
 
 
 def backends_for(kind: str, cwd: Path):

@@ -5,7 +5,11 @@
       frames   [(name, o, z, x)] connector frames drawn as RGB axes (x red, y green = z × x, blue z), labelled
       views    the fixed camera set VIEWS (iso ×2, front, top); 768 px, white background, neutral grey,
                feature edges dark so the shape reads like a CAD view, parallel projection
+      labels   [(text, point)] owner names drawn at a point (assembly views)
+      fit      points the camera frames instead of the scene's own (a joint sweep keeps one camera for all frames)
     render_part(fcstd, connectors, io_dir, out_dir)  worker op mesh_parts -> STL -> render_views
+    contact_sheet(pngs, out, cols)  tiles keyframes into one image (the backends send PNG only, no GIF)
+    write_gif(pngs, out)            ping-pong animation for people (release bundle, review folder)
 
 VTK is not safe to drive from several threads at once (part agents run in parallel), so one lock guards
 every render.
@@ -74,14 +78,16 @@ def _camera(pts: np.ndarray, d, up, diag: float, margin: float = 1.15):
 
 
 def render_views(items: list[dict], frames=(), out_dir: Path = Path("."), stem: str = "part",
-                 views=tuple(VIEWS), size: int = SIZE, title: str = "") -> dict[str, Path]:
+                 views=tuple(VIEWS), size: int = SIZE, title: str = "", labels=(), fit=None) -> dict[str, Path]:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     polys = [(_poly(it), it.get("color") or COLOR) for it in items]
     pts = np.vstack([q.points for q, _ in polys] + [np.asarray(f[1], float)[None] for f in frames])
+    if fit is not None:
+        pts = np.asarray(fit, float).reshape(-1, 3)
     lo, hi = pts.min(axis=0), pts.max(axis=0)
-    center, diag = (lo + hi) / 2, float(np.linalg.norm(hi - lo)) or 1.0
-    length = max(5.0, 0.12 * diag)
+    diag = float(np.linalg.norm(hi - lo)) or 1.0
+    length = max(5.0, 0.12 * diag) * (0.6 if fit is not None or labels else 1.0)
     tips = [np.asarray(f[1], float) + length * 1.3 * np.asarray(a, float)
             for f in frames for a in (f[2], f[3], np.cross(f[2], f[3]))]
     fit = np.vstack([pts] + [t[None] for t in tips])
@@ -98,6 +104,10 @@ def render_views(items: list[dict], frames=(), out_dir: Path = Path("."), stem: 
                 if edges.n_points:
                     p.add_mesh(edges, color=EDGE_COLOR, line_width=1.5, lighting=False)
             _frame_axes(p, frames, length)
+            if labels:
+                p.add_point_labels([np.asarray(pt, float) for _, pt in labels], [t for t, _ in labels], font_size=12,
+                                   text_color="black", point_size=1, shape_color="#fff8c4", shape_opacity=0.8,
+                                   always_visible=True, show_points=False)
             p.add_axes(line_width=3, labels_off=False)
             p.enable_parallel_projection()
             caption = None
@@ -130,3 +140,25 @@ def render_part(fcstd: Path, connectors: dict, io_dir: Path, out_dir: Path, name
         return {}, res.signals
     frames = [(n, c["o"], c["z"], c["x"]) for n, c in sorted(connectors.items())]
     return render_views([{"mesh": m["stl"]}], frames, out_dir, name, views=views, title=name), res.signals
+
+
+def contact_sheet(pngs: list[Path], out: Path, cols: int = 2) -> Path:
+    """Tiles equally sized images row by row (keyframes of one joint sweep), 1 px grey gutters."""
+    from PIL import Image
+    ims = [Image.open(p).convert("RGB") for p in pngs]
+    w, h = ims[0].size
+    rows = -(-len(ims) // cols)
+    sheet = Image.new("RGB", (cols * w + cols - 1, rows * h + rows - 1), "#9a9a9a")
+    for i, im in enumerate(ims):
+        sheet.paste(im, ((i % cols) * (w + 1), (i // cols) * (h + 1)))
+    sheet.save(out)
+    return Path(out)
+
+
+def write_gif(pngs: list[Path], out: Path, ms: int = 160) -> Path:
+    """Forward then back (ping-pong), looping."""
+    from PIL import Image
+    ims = [Image.open(p).convert("RGB").quantize(colors=128) for p in pngs]
+    seq = ims + ims[-2:0:-1]
+    seq[0].save(out, save_all=True, append_images=seq[1:], duration=ms, loop=0, optimize=True)
+    return Path(out)

@@ -8,6 +8,12 @@ before any part is generated (the expensive step). Budgets (plan §4.4): K compi
 escalation per part session, `part_rounds` sessions per part, ≤ 2 design rollbacks, `max_rounds` pipeline
 runs. A CODE route whose parts have spent their sessions on an assembly / print failure becomes a design
 rollback while rollbacks remain (the layout, not the part code, is the problem). On exhaustion the job ends with its open failures listed, never a silent pass.
+
+L8 (P2 §3.4): once every deterministic gate passes, the reviewer (Opus vision) judges the assembled design. A
+major issue is routed once like a gate failure (CODE: the named parts; DESIGN: a rollback) while budgets
+remain; the next passing candidate is reviewed again, and a second disagreement is a warning. The reviewed
+candidate (plan.json + parts/*.py) is snapshotted before the repair; if the repair ends in any failure, it is
+restored and the job passes with the warning: vision never turns a deterministic pass into a failure.
 """
 import json
 import re
@@ -17,7 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from agents import stages
+from agents import review, stages
 from agents.context import checkpoint_text
 from agents.router import route
 from agents.trace import Trace
@@ -25,6 +31,7 @@ from harness.pipeline import run_job
 from schemas.plan import AssemblyPlan
 
 Approve = Callable[[str], "bool | str"]   # True: go; False: abort; str: revise the plan with this note
+REVIEW = True   # L8 after the deterministic pipeline passes; tests that are not about L8 switch it off (monkeypatch)
 
 
 @dataclass
@@ -35,6 +42,7 @@ class Budgets:
     checkpoint_revisions: int = 2
     max_rounds: int = 6         # pipeline runs
     workers: int = 3            # parallel part agents
+    review_rounds: int = 2      # L8 reviews per job, one repair between them
 
 
 @dataclass
@@ -49,6 +57,7 @@ class JobResult:
     totals: dict = field(default_factory=dict)
     elapsed_s: float = 0.0
     package: str | None = None
+    review: dict = field(default_factory=dict)     # L8: {status: pass | warning | skipped, rounds, scores, issues, reason}
 
 
 def slug(text: str, n: int = 40) -> str:
@@ -64,6 +73,25 @@ def changed_parts(old: AssemblyPlan, new: AssemblyPlan) -> list[str]:
         joints = sorted(j.model_dump_json() for j in plan.joints if name in (j.parent.split(".")[0], j.child.split(".")[0]))
         return spec.model_dump_json() if spec else None, comps, joints
     return [p.name for p in new.parts if old.part(p.name) is None or facts(old, p.name) != facts(new, p.name)]
+
+
+def _snapshot(job_dir: Path, plan: AssemblyPlan) -> dict:
+    return {"plan": plan, "plan_json": (job_dir / "plan.json").read_text(encoding="utf-8"),
+            "parts": {p.stem: p.read_text(encoding="utf-8") for p in (job_dir / "parts").glob("*.py")}}
+
+
+def _restore(job_dir: Path, snap: dict) -> AssemblyPlan:
+    (job_dir / "plan.json").write_text(snap["plan_json"], encoding="utf-8")
+    for p in (job_dir / "parts").glob("*.py"):
+        if p.stem not in snap["parts"]:
+            p.unlink()
+    for name, text in snap["parts"].items():
+        (job_dir / "parts" / f"{name}.py").write_text(text, encoding="utf-8")
+    return snap["plan"]
+
+
+def _verdict_facts(v) -> dict:
+    return {"scores": v.scores.model_dump(), "issues": [i.model_dump() for i in v.issues], "route_hint": v.route_hint}
 
 
 def run(prompt: str, job_dir: Path, backends: stages.Backends, approve: Approve | None = None,
@@ -85,6 +113,22 @@ def run(prompt: str, job_dir: Path, backends: stages.Backends, approve: Approve 
         log("== job %s: %s (%s); %d sessions, $%.3f, %.0f s" % (job_dir.name, status, reason, res.totals["sessions"],
                                                                res.totals["cost_usd"], res.elapsed_s))
         return res
+
+    snap: dict | None = None    # the reviewed candidate while an L8 repair is under way
+
+    def fail(reason, open_failures=()):
+        """A failure; during an L8 repair, restore the reviewed candidate and pass with a warning instead."""
+        if snap is None:
+            return finish("fail", reason, open_failures)
+        log("   the L8 repair ended in a failure (%s); restoring the reviewed candidate" % reason)
+        _restore(job_dir, snap)
+        again = run_job(job_dir, job_dir / "out", robot=slug(job_dir.name), description=description)
+        if not again.ok:   # the same sources passed before; only a changed environment gets here
+            return finish("fail", "restored L8 candidate no longer passes: %s" % again.failed_stage,
+                          [x.model_dump() for x in again.signals if x.level == "failure"])
+        res.package = again.package
+        res.review.update(status="warning", reason="the L8 repair failed (%s); kept the reviewed candidate" % reason)
+        return finish("pass", "all gates pass; L8 issues open (repair failed)")
 
     log("-- requirements")
     spec, _ = stages.requirements(prompt, backends, trace)
@@ -121,8 +165,7 @@ def run(prompt: str, job_dir: Path, backends: stages.Backends, approve: Approve 
         if todo:
             exhausted = [n for n in todo if sessions.get(n, 0) >= b.part_rounds]
             if exhausted:
-                return finish("fail", "part budget exhausted: %s" % exhausted,
-                              [{"part": n, "feedback": todo[n]} for n in exhausted])
+                return fail("part budget exhausted: %s" % exhausted, [{"part": n, "feedback": todo[n]} for n in exhausted])
             log("-- parts: %s" % ", ".join(todo))
             with ThreadPoolExecutor(max_workers=b.workers) as pool:
                 futs = {n: pool.submit(stages.part_agent, plan, n, job_dir, backends, trace, fb, b.k) for n, fb in todo.items()}
@@ -140,16 +183,49 @@ def run(prompt: str, job_dir: Path, backends: stages.Backends, approve: Approve 
                                                      " (escalated)" if o.escalated else "",
                                                      ", L3v %s" % o.look["status"] if o.look else ""))
         if res.rounds >= b.max_rounds:
-            return finish("fail", "pipeline round budget exhausted", last)
+            return fail("pipeline round budget exhausted", last)
         res.rounds += 1
         log("-- gates (round %d)" % res.rounds)
         rep = run_job(job_dir, job_dir / "out", robot=robot, description=description)
         r = route(rep, plan)
         last = [x.model_dump() for x in rep.signals if x.level == "failure"]
         log("   %s -> %s %s" % (rep.failed_stage or "all stages pass", r.kind, ", ".join(r.parts) if r.parts else ""))
+        if r.kind != "pass" and snap is not None:
+            return fail("%s failed after the L8 repair" % rep.failed_stage, last)
         if r.kind == "pass":
             res.package = rep.package
-            return finish("pass", "all P1 gates and D1/D2/D4 pass" if description else "all P1 gates pass")
+            why = "all gates and D1/D2/D4 pass" if description else "all gates pass"
+            snap = None
+            if not REVIEW or b.review_rounds <= 0:
+                return finish("pass", why)
+            n = res.review.get("rounds", 0) + 1
+            log("-- L8 review (round %d)" % n)
+            rv = review.review(plan, rep, job_dir, backends("review"), trace, res.parts, n)
+            v = rv.verdict
+            review.record(job_dir, {"round": n, **(_verdict_facts(v) if v else {}), "error": rv.error,
+                                    "images": [str(p) for p in rv.inputs.images()],
+                                    "gifs": [s["gif"] for s in rv.inputs.sweeps]})
+            res.review = {"rounds": n, **(_verdict_facts(v) if v else {})}
+            if v is None:     # a reviewer that cannot answer does not hold the design back
+                res.review.update(status="skipped", reason=rv.error)
+                return finish("pass", why + "; L8 skipped")
+            log("   L8 %s: geometry %d, detail %d, motion %d, %d issues" % (
+                v.route_hint, v.scores.geometry, v.scores.detail, v.scores.motion, len(v.issues)))
+            if v.route_hint == "pass":
+                res.review["status"] = "pass"
+                return finish("pass", why + "; L8 pass")
+            rr = review.to_route(v)
+            spent = [p for p in rr.parts if sessions.get(p, 0) >= b.part_rounds]
+            blocked = ("the reviewer still disagrees after %d reviews" % n if n >= b.review_rounds else
+                       "pipeline round budget exhausted" if res.rounds >= b.max_rounds else
+                       "no design rollback left" if rr.kind == "design" and res.rollbacks >= b.design_rollbacks else
+                       "part budget spent on %s" % spent if spent else "")
+            if blocked:
+                res.review.update(status="warning", reason=blocked + "; accepted (L8 never blocks)")
+                return finish("pass", why + "; L8 issues open")
+            snap = _snapshot(job_dir, plan)
+            log("   L8 -> %s %s" % (rr.kind, ", ".join(rr.parts)))
+            r = rr
         if r.kind == "stop":
             return finish("fail", r.reason, r.signals)
         if r.kind == "code":
@@ -161,12 +237,12 @@ def run(prompt: str, job_dir: Path, backends: stages.Backends, approve: Approve 
             r.signals = [x for v in r.parts.values() for x in v]
             log("   CODE budget spent on %s -> DESIGN" % ", ".join(spent))
         if res.rollbacks >= b.design_rollbacks:
-            return finish("fail", "design rollback budget exhausted", r.signals)
+            return fail("design rollback budget exhausted", r.signals)
         res.rollbacks += 1
         log("-- design rollback %d" % res.rollbacks)
         d = stages.design(spec, bom, backends, trace, job_dir, previous=plan, feedback=r.signals)
         if d.plan is None:
-            return finish("fail", "design revision did not pass check_plan", r.signals)
+            return fail("design revision did not pass check_plan", r.signals)
         changed = changed_parts(plan, d.plan)
         plan = d.plan
         for n in list(sessions):

@@ -1,0 +1,123 @@
+{
+  "$defs": {
+    "ReviewIssue": {
+      "additionalProperties": false,
+      "properties": {
+        "severity": {
+          "enum": [
+            "major",
+            "minor"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "where": {
+          "minLength": 1,
+          "title": "Where",
+          "type": "string"
+        },
+        "what": {
+          "minLength": 1,
+          "title": "What",
+          "type": "string"
+        },
+        "route": {
+          "enum": [
+            "code",
+            "design"
+          ],
+          "title": "Route",
+          "type": "string"
+        },
+        "parts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Parts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "severity",
+        "where",
+        "what",
+        "route"
+      ],
+      "title": "ReviewIssue",
+      "type": "object"
+    },
+    "Scores": {
+      "additionalProperties": false,
+      "properties": {
+        "geometry": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Geometry",
+          "type": "integer"
+        },
+        "detail": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Detail",
+          "type": "integer"
+        },
+        "motion": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Motion",
+          "type": "integer"
+        },
+        "reasons": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "propertyNames": {
+            "enum": [
+              "geometry",
+              "detail",
+              "motion"
+            ]
+          },
+          "title": "Reasons",
+          "type": "object"
+        }
+      },
+      "required": [
+        "geometry",
+        "detail",
+        "motion"
+      ],
+      "title": "Scores",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "L8: the assembled design against the request. route_hint is \"pass\" iff no issue is major; \"design\" if any\nmajor issue is a design one (a revised layout regenerates parts anyway), else \"code\".",
+  "properties": {
+    "scores": {
+      "$ref": "#/$defs/Scores"
+    },
+    "issues": {
+      "items": {
+        "$ref": "#/$defs/ReviewIssue"
+      },
+      "title": "Issues",
+      "type": "array"
+    },
+    "route_hint": {
+      "enum": [
+        "pass",
+        "code",
+        "design"
+      ],
+      "title": "Route Hint",
+      "type": "string"
+    }
+  },
+  "required": [
+    "scores",
+    "route_hint"
+  ],
+  "title": "ReviewVerdict",
+  "type": "object"
+}

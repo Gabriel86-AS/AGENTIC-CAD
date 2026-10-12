@@ -80,6 +80,7 @@ def summarize(case: dict, job_dir: Path) -> dict:
         "compiles": len(compiles), "compile_failures_by_gate": _count(g for c in compiles for g in c["gates"]),
         "parts": res.get("parts") or {},
         "rounds": res.get("rounds", 0), "rollbacks": res.get("rollbacks", 0),
+        "review": {k: v for k, v in (res.get("review") or {}).items() if k in ("status", "rounds", "scores", "route_hint")},
         "tokens_in": totals.get("tokens_in", 0), "tokens_out": totals.get("tokens_out", 0),
         "cost_usd": totals.get("cost_usd", 0.0), "sessions": totals.get("sessions", 0),
         "wall_s": res.get("elapsed_s", 0.0),
