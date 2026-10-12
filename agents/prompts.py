@@ -1,5 +1,6 @@
 """System prompts, assembled from the repo's own docs so they never drift from the code:
-docs/sdk.md (part agents), packs/<id>/knowledge.md (requirements + design), bench/golden/b1_3 (worked example)."""
+docs/sdk.md (part agents), packs/<id>/knowledge.md (requirements + design), the pack's worked example
+(bench/golden/<id>: b1_3 for the manipulator pack and core-only jobs, m_gearbox for mechanisms)."""
 from pathlib import Path
 
 import packs
@@ -7,7 +8,7 @@ from agents.context import library_index
 from components.card import card_path
 
 ROOT = Path(__file__).resolve().parents[1]
-GOLDEN = ROOT / "bench" / "golden" / "b1_3"
+GOLDENS = ROOT / "bench" / "golden"
 
 
 def _read(p: Path) -> str:
@@ -25,7 +26,7 @@ Turn the user's request into a Spec and submit it with the `submit_spec` tool. D
 sensible defaults (below) and record assumptions in `notes`.
 
 Spec fields:
-- pack: a domain pack id if the request fits one, else null (core-only mechanisms: boxes, hinges, drawers ...).
+- pack: a domain pack id if the request fits one, else null (core only: nothing in the packs below fits).
 - dof: number of independent moving joints (an unactuated hinge or slide counts).
 - reach_mm, payload_g: only when stated or implied by the pack defaults; else null.
 - components_requested: card ids from the library that the design must use (e.g. the servo type).
@@ -49,8 +50,10 @@ one-line summary."""
 def design_system(pack: str | None, cards: list[str]) -> str:
     knowledge = packs.knowledge(pack) if pack else _read(ROOT / "docs" / "core_mechanisms.md")
     card_text = "\n\n".join("### `%s`\n```yaml\n%s```" % (c, _read(card_path(c))) for c in cards)
+    ex = packs.example(pack)
+    golden = GOLDENS / ex["golden"]
     golden_parts = "\n\n".join("#### parts/%s\n```python\n%s```" % (p.name, _read(p))
-                               for p in sorted((GOLDEN / "parts").glob("*.py")))
+                               for p in sorted((golden / "parts").glob("*.py")))
     return f"""You are the design agent of AgenticCAD. You write the AssemblyPlan (plan.json): parts, purchased
 components, connectors and joints. Part agents then write one FreeCAD part program per plan part, each seeing
 only its own part's excerpt (intent, connectors, params, components seated on it, joints, neighbours'
@@ -104,17 +107,19 @@ intents). The assembly is built from your connectors, so the plan is the contrac
 ## Cards in this job's bill of materials
 {card_text}
 
-## Worked example: golden B1-3 (yaw + shoulder arm, 150 mm reach, 50 g); it passes every gate
+## Worked example: {ex["title"]}; it passes every gate
 #### plan.json
 ```json
-{_read(GOLDEN / "plan.json")}```
+{_read(golden / "plan.json")}```
 
 {golden_parts}
 """
 
 
-def part_system(name: str, excerpt: str, k: int) -> str:
-    golden = "\n\n".join("#### parts/%s\n```python\n%s```" % (p, _read(GOLDEN / "parts" / p)) for p in ("turret.py", "arm.py"))
+def part_system(name: str, excerpt: str, k: int, pack: str | None = None) -> str:
+    ex = packs.example(pack)
+    golden = "\n\n".join("#### parts/%s\n```python\n%s```" % (p, _read(GOLDENS / ex["golden"] / "parts" / p))
+                         for p in ex["parts"])
     return f"""You are a part agent of AgenticCAD. Write the FreeCAD part program parts/{name}.py with the
 AgenticCAD SDK so that it meets the contract below, then make it compile.
 
@@ -134,7 +139,7 @@ with a two-line summary of the part. If the budget runs out, stop and state what
 ## SDK reference
 {_read(ROOT / "docs" / "sdk.md")}
 
-## Examples (golden B1-3, passing every gate)
+## Examples ({ex["title"]}, passing every gate)
 {golden}
 """
 

@@ -1,0 +1,26 @@
+# Mechanisms pack bench prompts, P2 bench v1 slice (phase file §4). `spec` = the Spec the requirements agent
+# should reach (checked by bench/runner.py; notes are not compared). No actuator => no electronics.
+- id: M2-1
+  prompt: "A small 3D-printable box, about 90 x 60 x 40 mm, with a lid on a pin hinge (an M3 screw as the pin) that opens to about 110 degrees."
+  spec: { pack: mechanisms, dof: 1, components_requested: [], electronics: [] }
+- id: M2-2
+  prompt: "A desk organizer: a frame holding one drawer on dovetail runners, about 120 mm wide, 100 mm deep and 45 mm tall; the drawer pulls out 70 mm."
+  spec: { pack: mechanisms, dof: 1, components_requested: [], electronics: [] }
+- id: M2-3
+  prompt: "A linear slide: a 150 mm long rail with a carriage that travels 100 mm along a dovetail guide."
+  spec: { pack: mechanisms, dof: 1, components_requested: [], electronics: [] }
+- id: M2-4
+  prompt: "A gear pair demonstrator: a 12-tooth and a 30-tooth spur gear (module 1.5) turning on M3 screw axles on a base plate, with a crank knob on the small gear."
+  spec: { pack: mechanisms, dof: 1, components_requested: [], electronics: [] }
+- id: M2-5
+  prompt: "A box about 80 x 60 x 35 mm with a hinged lid held shut by a printed snap latch at the front."
+  spec: { pack: mechanisms, dof: 1, components_requested: [], electronics: [] }
+- id: M2-6
+  prompt: "A passive desk lamp arm: a weighted round base with a swivel, two arm links on friction pivots (M3 bolts), and a clip for a small LED head at the end, about 250 mm reach."
+  spec: { pack: mechanisms, dof: 3, reach_mm: 250, components_requested: [], electronics: [] }
+- id: M2-7
+  prompt: "A metronome model: a pyramid-shaped body, a pendulum on a pivot near the base that swings 30 degrees each way, and a weight that slides along the pendulum."
+  spec: { pack: mechanisms, dof: 2, components_requested: [], electronics: [] }
+- id: M2-8
+  prompt: "A folding tablet stand: a base plate, a back plate hinged to it, and a hinged support leg behind the back plate; it folds flat."
+  spec: { pack: mechanisms, dof: 2, components_requested: [], electronics: [] }

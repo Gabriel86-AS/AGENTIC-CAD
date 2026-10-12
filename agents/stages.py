@@ -195,7 +195,7 @@ def part_agent(plan: AssemblyPlan, name: str, job_dir: Path, backends: Backends,
         if ws.own.exists():
             prompt += "\nparts/%s.py already exists from an earlier attempt; read it and repair it." % name
         prompt += extra
-        res = backends(role).run(prompts.part_system(name, excerpt, k), prompt, ws.tools())
+        res = backends(role).run(prompts.part_system(name, excerpt, k, plan.requirements.pack), prompt, ws.tools())
         trace.session("part:%s%s" % (name, ":escalated" if role != "part" else ""), res, prompt)
         out.sessions += 1
         out.compiles += ws.compiles

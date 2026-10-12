@@ -21,7 +21,9 @@ sweep_assembly request:
      turns it into signals.
     Owners are placed by our FK (D15), no Assembly WB solve: the residual gate in build_assembly already
     ties the WB to the same math. Pairs inside one rigid group (fixed joints, component attaches) cannot
-    move against each other and are checked at pose 0 only.
+    move against each other and are checked at pose 0 only. A pair's overlap and distance depend only on
+    its relative placement, so they are computed once per distinct relative placement (a gear pair under a
+    cover that swings on its own is not re-cut at every cover pose).
 
 mesh_parts request:
     meshes          {name: .FCStd}      out_dir     directory for <name>.stl
@@ -115,6 +117,12 @@ def _place(shapes, world):
     return placed
 
 
+def _rel_key(wa, wb):
+    """Relative placement of b in a's frame, rounded (memo key for the pair checks)."""
+    rel = O.to_placement(wa).inverse().multiply(O.to_placement(wb))
+    return tuple(round(v, 6) for v in (*rel.Base, *rel.Rotation.Q))
+
+
 def _probe(p, shapes, tree):
     """Closest distance of owners a and b over the probe's poses (0 when they overlap)."""
     a, b, near = p["a"], p["b"], p.get("near")
@@ -169,6 +177,7 @@ def sweep_assembly(req, res):
     clear = {(a, b): {"a": a, "b": b, "min_mm": None, "pose": None, "q": None, "n_near": 0}
              for a, b in pairs if group[a] != group[b]}
     collisions, n_checks, poses = [], 0, req.get("poses") or [{}]
+    memo, n_reused = {}, 0          # (a, b, relative placement) -> {"vol", "bbox", "d"}
     for i, pose in enumerate(poses):
         values, psigs = tree.joint_values(pose)
         for s in psigs:
@@ -186,18 +195,30 @@ def sweep_assembly(req, res):
             box.enlarge(window)
             if not box.intersect(placed[b].BoundBox):
                 continue
+            key = (a, b, _rel_key(world[a], world[b]))
+            m = memo.get(key)
+            if m is None:
+                m = memo[key] = {"vol": None, "bbox": None, "d": None}
+            else:
+                n_reused += 1
             d = None
             if placed[a].BoundBox.intersect(placed[b].BoundBox):
-                inter = placed[a].common(placed[b])
-                if inter.Volume > min_vol:
-                    collisions.append({"pose": i, "q": values, "a": a, "b": b, "volume_mm3": inter.Volume,
-                                       "bbox": {o: _local_bbox(inter, world[o]) for o in (a, b)}})
+                if m["vol"] is None:
+                    inter = placed[a].common(placed[b])
+                    m["vol"] = inter.Volume
+                    if inter.Volume > min_vol:
+                        m["bbox"] = {o: _local_bbox(inter, world[o]) for o in (a, b)}
+                if m["vol"] > min_vol:
+                    collisions.append({"pose": i, "q": values, "a": a, "b": b, "volume_mm3": m["vol"],
+                                       "bbox": m["bbox"]})
                     d = 0.0
             c = clear.get((a, b))
             if c is None:
                 continue
             if d is None:
-                d = placed[a].distToShape(placed[b])[0]
+                if m["d"] is None:
+                    m["d"] = placed[a].distToShape(placed[b])[0]
+                d = m["d"]
             c["n_near"] += 1
             if c["min_mm"] is None or d < c["min_mm"]:
                 c.update(min_mm=d, pose=i, q=values)
@@ -205,7 +226,7 @@ def sweep_assembly(req, res):
     res["result"].update({"owners": props, "collisions": collisions, "clearances": list(clear.values()),
                           "probes": probes, "n_poses": len(poses), "n_checks": n_checks, "groups": group})
     res["metrics"] = {"n_owners": len(shapes), "n_pairs": len(pairs), "n_checks": n_checks,
-                      "n_collisions": len(collisions)}
+                      "n_collisions": len(collisions), "n_reused": n_reused}
     res["ok"] = not any(s["level"] == "failure" for s in sigs)
     _close([doc] + opened)
 

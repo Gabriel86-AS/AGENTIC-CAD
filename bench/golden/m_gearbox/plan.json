@@ -1,0 +1,345 @@
+{
+  "units": "mm",
+  "ground": "base",
+  "dof": 2,
+  "requirements": {
+    "pack": "mechanisms",
+    "dof": 2,
+    "components_requested": [],
+    "electronics": [],
+    "material": "PETG",
+    "notes": "A gear pair (12 and 30 teeth, module 1.5) on M3 screw axles on a base plate, a crank knob on the small gear, and a hinged dust cover that snaps shut at the front."
+  },
+  "params": {
+    "teeth_a": {
+      "value": 12,
+      "min": 12,
+      "max": 12,
+      "unit": "-"
+    },
+    "teeth_b": {
+      "value": 30,
+      "min": 30,
+      "max": 30,
+      "unit": "-"
+    },
+    "knob_h": {
+      "value": 10,
+      "min": 6,
+      "max": 14,
+      "unit": "mm"
+    }
+  },
+  "components": [],
+  "parts": [
+    {
+      "name": "base",
+      "intent": "Ground plate 90 x 86 x 4 mm (x -20..70, y -42..44, top face at z = 0). Two washer bosses d 8, 1 mm high, at the gear axles (0, 0) and (31.6, 0) = module 1.5 x (12 + 30) / 2 + 0.1 backlash, each tapped M3 (tap_m3) 5 mm deep through boss and plate for the screw axles; axle connectors 0.5 mm above the boss tops. Fixed half of the cover hinge: hinge('hinge', 'a', 70, knuckles=5, pin='m3', web=4, web_angle=180, horizontal=True): the axis runs along -x at y 40, z 4.5, behind the cover's back wall, and the webs drop into the plate. Two tap_m3 holes 4 mm deep at (18, -38.5) and (36, -38.5) for the catch block's screws.",
+      "connectors": [
+        {
+          "name": "axle_a",
+          "o": [
+            0,
+            0,
+            1.5
+          ],
+          "z": [
+            0,
+            0,
+            1
+          ],
+          "x": [
+            1,
+            0,
+            0
+          ],
+          "label": "axle"
+        },
+        {
+          "name": "axle_b",
+          "o": [
+            31.6,
+            0,
+            1.5
+          ],
+          "z": [
+            0,
+            0,
+            1
+          ],
+          "x": [
+            1,
+            0,
+            0
+          ],
+          "label": "axle"
+        },
+        {
+          "name": "hinge",
+          "o": [
+            60,
+            40,
+            4.5
+          ],
+          "z": [
+            -1,
+            0,
+            0
+          ],
+          "x": [
+            0,
+            0,
+            1
+          ],
+          "label": "hinge"
+        },
+        {
+          "name": "catch_mount",
+          "o": [
+            27,
+            -35.5,
+            0
+          ],
+          "z": [
+            0,
+            0,
+            1
+          ],
+          "x": [
+            1,
+            0,
+            0
+          ],
+          "label": "catch_mount"
+        }
+      ],
+      "bbox_mm": [
+        90,
+        86,
+        12.5
+      ]
+    },
+    {
+      "name": "gear_a",
+      "intent": "Driver gear: spur_gear('axle', 1.5, P.teeth_a, 6, mesh='tooth', mesh_angle=0) (tooth toward gear_b on +x), M3 clearance bore; crank knob: a boss d 5, P.knob_h high, at (4, 0) on the gear's top face (z 6).",
+      "connectors": [
+        {
+          "name": "axle",
+          "o": [
+            0,
+            0,
+            0
+          ],
+          "z": [
+            0,
+            0,
+            1
+          ],
+          "x": [
+            1,
+            0,
+            0
+          ],
+          "label": "axle"
+        }
+      ],
+      "bbox_mm": [
+        21,
+        21,
+        16
+      ]
+    },
+    {
+      "name": "gear_b",
+      "intent": "Follower gear: spur_gear('axle', 1.5, P.teeth_b, 6, mesh='gap', mesh_angle=180) (a tooth gap toward gear_a on -x), M3 clearance bore.",
+      "connectors": [
+        {
+          "name": "axle",
+          "o": [
+            0,
+            0,
+            0
+          ],
+          "z": [
+            0,
+            0,
+            1
+          ],
+          "x": [
+            1,
+            0,
+            0
+          ],
+          "label": "axle"
+        }
+      ],
+      "bbox_mm": [
+        48,
+        48,
+        6
+      ]
+    },
+    {
+      "name": "cover",
+      "intent": "Dust cover over the gears, part frame = the base frame when closed: top plate 90 x 70 x 2 at z 20..22 (x -20..70, y -35..35), 2 mm walls down to z 0.5 (0.5 mm above the plate), open bottom. Moving half of the hinge: hinge('hinge', 'b', 70, knuckles=5, pin='m3', web=6, web_angle=-90, horizontal=True): webs from the axis toward -y into the back wall. Front tab 14 x 9 x 2 (x 20..34, y -44..-35, z 20..22) under which the latch hook hangs: snap_hook('latch', 'a', 15, 2, 10).",
+      "connectors": [
+        {
+          "name": "hinge",
+          "o": [
+            60,
+            40,
+            4.5
+          ],
+          "z": [
+            -1,
+            0,
+            0
+          ],
+          "x": [
+            0,
+            0,
+            1
+          ],
+          "label": "hinge"
+        },
+        {
+          "name": "latch",
+          "o": [
+            27,
+            -41.5,
+            20
+          ],
+          "z": [
+            0,
+            0,
+            -1
+          ],
+          "x": [
+            0,
+            1,
+            0
+          ],
+          "label": "latch"
+        }
+      ],
+      "bbox_mm": [
+        90,
+        88,
+        21.5
+      ]
+    },
+    {
+      "name": "catch",
+      "intent": "Latch catch block 24 x 6 x 18 (x -12..12, y -6..0, z 0..18) screwed to the base in front of the cover's front wall (0.5 mm gap) by two M3 screws from its top (clearance holes at (+-9, -3), heads outside the cover and its tab): snap_hook('latch', 'b', 15, 2, 10) cuts the window the hook's lip enters, between the screws.",
+      "connectors": [
+        {
+          "name": "mount",
+          "o": [
+            0,
+            0,
+            0
+          ],
+          "z": [
+            0,
+            0,
+            1
+          ],
+          "x": [
+            1,
+            0,
+            0
+          ],
+          "label": "catch_mount"
+        },
+        {
+          "name": "latch",
+          "o": [
+            0,
+            -6,
+            20
+          ],
+          "z": [
+            0,
+            0,
+            -1
+          ],
+          "x": [
+            0,
+            1,
+            0
+          ],
+          "label": "latch"
+        }
+      ],
+      "bbox_mm": [
+        24,
+        6,
+        18
+      ]
+    }
+  ],
+  "joints": [
+    {
+      "name": "j_crank",
+      "type": "continuous",
+      "parent": "base.axle_a",
+      "child": "gear_a.axle"
+    },
+    {
+      "name": "j_follower",
+      "type": "gears",
+      "parent": "base.axle_b",
+      "child": "gear_b.axle",
+      "mimic": {
+        "joint": "j_crank",
+        "multiplier": -0.4
+      }
+    },
+    {
+      "name": "j_cover",
+      "type": "revolute",
+      "parent": "base.hinge",
+      "child": "cover.hinge",
+      "limits": {
+        "lower": 0,
+        "upper": 1.92,
+        "effort": 2,
+        "velocity": 1
+      }
+    },
+    {
+      "name": "j_catch",
+      "type": "fixed",
+      "parent": "base.catch_mount",
+      "child": "catch.mount"
+    }
+  ],
+  "tests": [
+    {
+      "expect": "allow_overlap",
+      "a": "cover",
+      "b": "catch",
+      "reason": "snap latch: the hook beam flexes over the catch while the cover opens; a rigid sweep overlaps"
+    },
+    {
+      "expect": "clearance",
+      "a": "cover",
+      "b": "gear_a",
+      "min_mm": 1.0
+    },
+    {
+      "expect": "clearance",
+      "a": "cover",
+      "b": "base",
+      "min_mm": 0.4,
+      "over_joint": "j_cover",
+      "samples": 9
+    },
+    {
+      "expect": "contact",
+      "a": "catch",
+      "b": "base",
+      "near": "base.catch_mount"
+    }
+  ]
+}
