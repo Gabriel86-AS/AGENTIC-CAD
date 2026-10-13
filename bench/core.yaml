@@ -1,9 +1,19 @@
-# Core-only bench prompts, P1 (phase file §5): no pack, no actuator; the core SDK and gates alone.
+# Core-only bench prompts (P1 §5 B1-6/7; P2 bench v1 §4 C2-1/2): no pack, no actuator; the core SDK and gates alone.
+# The runner hides every pack for these cases (AGENTICCAD_PACKS="", D55). v1: false = not in the bench v1 set
+# (the mechanisms pack now covers a hinged box and a drawer; M2-1 / M2-2).
 # No actuator => no electronics ([]; the resolver adds the generic bay only for actuated designs, D39).
 # `spec` = the Spec the requirements agent should reach (checked by bench/runner.py; notes are not compared).
 - id: B1-6
   prompt: "A small 3D-printable box, about 80 x 60 x 40 mm, with a lid on a printed hinge that opens to about 110 degrees."
   spec: { pack: null, dof: 1, components_requested: [], electronics: [] }
+  v1: false
 - id: B1-7
   prompt: "A 3D-printable drawer that slides in a frame, about 100 mm wide, 120 mm deep and 50 mm tall, pulling out about 80 mm."
+  spec: { pack: null, dof: 1, components_requested: [], electronics: [] }
+  v1: false
+- id: C2-1
+  prompt: "A phone stand with a hinged support leg that folds flat, for phones up to 80 mm wide."
+  spec: { pack: null, dof: 1, components_requested: [], electronics: [] }
+- id: C2-2
+  prompt: "A small box, about 80 x 50 x 30 mm, with a lid that slides shut in grooves along the top."
   spec: { pack: null, dof: 1, components_requested: [], electronics: [] }

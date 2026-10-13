@@ -12,6 +12,7 @@ from typing import Callable
 
 from pydantic import ValidationError
 
+import packs
 from agents import look, prompts
 from agents.context import part_excerpt
 from agents.trace import Trace
@@ -51,6 +52,8 @@ def requirements(prompt: str, backends: Backends, trace: Trace) -> tuple[Spec | 
                    if c not in card_ids()]
         if unknown:
             return {"ok": False, "errors": ["no card %r in the library" % c for c in unknown]}
+        if spec.pack is not None and spec.pack not in packs.available():
+            return {"ok": False, "errors": ["no pack %r in this run; packs: %s (else null)" % (spec.pack, packs.available())]}
         box["spec"] = spec
         return {"ok": True}
 

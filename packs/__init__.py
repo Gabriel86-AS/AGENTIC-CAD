@@ -9,8 +9,12 @@ methods on sdk.Part inside freecadcmd), and the orchestrator reads the rest as d
     composites.py    optional; runs inside freecadcmd
     knowledge.md     curated design notes, put straight into the design agents' prompts (P1)
     bench.yaml       benchmark prompts: [{id, prompt, spec}]
+
+AGENTICCAD_PACKS (comma-separated ids, "" = none) limits the packs the agents see and the SDK loads; worker
+processes inherit it. The bench sets it to "" for core-only cases (D55).
 """
 import importlib
+import os
 from pathlib import Path
 
 import yaml
@@ -18,13 +22,22 @@ import yaml
 ROOT = Path(__file__).resolve().parent
 
 
-def available() -> list[str]:
+ENV = "AGENTICCAD_PACKS"
+
+
+def installed() -> list[str]:
     return sorted(p.name for p in ROOT.iterdir() if (p / "__init__.py").is_file())
 
 
+def available() -> list[str]:
+    """Installed packs, filtered by AGENTICCAD_PACKS when it is set."""
+    only = os.environ.get(ENV)
+    return installed() if only is None else [p for p in installed() if p in {x.strip() for x in only.split(",")}]
+
+
 def meta(pack: str) -> dict:
-    if pack not in available():
-        raise KeyError("no pack %r; packs: %s" % (pack, available()))
+    if pack not in installed():
+        raise KeyError("no pack %r; packs: %s" % (pack, installed()))
     return importlib.import_module("packs." + pack).PACK
 
 

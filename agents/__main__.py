@@ -16,11 +16,15 @@ OPUS, SONNET = "claude-opus-5-5", "claude-sonnet-5-5"
 ROLES = {"requirements": (OPUS, 8, 1.0), "design": (OPUS, 40, 5.0), "part": (SONNET, 30, 2.0),
          "part_escalated": (OPUS, 30, 3.0), "look": (SONNET, 4, 0.5),
          "review": (OPUS, 4, 1.5), "router": (SONNET, 3, 0.3)}   # model, max turns, per-session budget (USD, Agent SDK only)
+# bench v1 configs (P2 §4): `routed` = ROLES; the others put one model on every role (an escalation then only
+# restarts the part session on the same model)
+CONFIGS = {"routed": None, "sonnet_only": SONNET, "opus_only": OPUS}
 
 
-def backends_for(kind: str, cwd: Path):
+def backends_for(kind: str, cwd: Path, config: str = "routed"):
     def make(role: str):
         model, turns, usd = ROLES[role]
+        model = CONFIGS[config] or model
         if kind == "api":
             from llm.claude_api_backend import ClaudeAPIBackend
             return ClaudeAPIBackend(model=model, max_turns=turns, max_tokens=16000)

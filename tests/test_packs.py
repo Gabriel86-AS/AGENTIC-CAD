@@ -20,10 +20,11 @@ def test_declared_composites_exist():
 
 def test_bench_prompts_have_valid_specs():
     items = packs.bench("manipulator")
-    assert [b["id"] for b in items] == ["B1-1", "B1-2", "B1-3", "B1-4", "B1-5"]
+    ids = ["B1-%d" % i for i in (1, 2, 3, 4, 5, 8, 9, 10)] + ["B2-%d" % i for i in range(1, 13)]
+    assert [b["id"] for b in items] == ids
     for b in items:
         spec = Spec.model_validate(b["spec"])
-        assert spec.pack == "manipulator" and spec.dof == 2 and b["prompt"]
+        assert spec.pack == "manipulator" and spec.dof == (2 if b["id"].startswith("B1") else 3) and b["prompt"]
 
 
 def test_knowledge_names_real_calls():

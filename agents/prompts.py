@@ -16,7 +16,8 @@ def _read(p: Path) -> str:
 
 
 def _pack_list() -> str:
-    return "\n".join("- `%s`: %s" % (k, packs.meta(k)["summary"]) for k in packs.available())
+    return ("\n".join("- `%s`: %s" % (k, packs.meta(k)["summary"]) for k in packs.available())
+            or "(none available in this run: pack is null)")
 
 
 def requirements_system() -> str:

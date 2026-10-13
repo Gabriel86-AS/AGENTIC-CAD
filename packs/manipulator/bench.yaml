@@ -15,3 +15,50 @@
 - id: B1-5
   prompt: "A 2-DOF arm with a base yaw joint and a shoulder joint, 150 mm reach, carrying 50 g, controlled by an ESP32 DevKit and a PCA9685 servo driver housed in the base."
   spec: { pack: manipulator, dof: 2, reach_mm: 150, payload_g: 50, components_requested: [servo/mg996r], electronics: [electronics/esp32_devkit, electronics/pca9685] }
+# P2 bench v1 (phase file §4): 2-DOF variations of reach and base shape (B1-8..10), 3-DOF at 200 mm / 50 g with
+# different link styles, bay placements and named boards (B2-1..12). Golden arm3 is not shown to the agents.
+- id: B1-8
+  prompt: "A 2-DOF arm with a base yaw joint and a shoulder joint on a round base, 120 mm reach, carrying 30 g."
+  spec: { pack: manipulator, dof: 2, reach_mm: 120, payload_g: 30, components_requested: [servo/mg996r], electronics: generic, notes: "round base" }
+- id: B1-9
+  prompt: "A 2-DOF planar arm with a shoulder and an elbow joint on a fixed base, 220 mm reach, 20 g payload."
+  spec: { pack: manipulator, dof: 2, reach_mm: 220, payload_g: 20, components_requested: [servo/mg996r], electronics: generic }
+- id: B1-10
+  prompt: "A 2-DOF pan-tilt head for a 60 g sensor, with the pan servo inside a square base."
+  spec: { pack: manipulator, dof: 2, payload_g: 60, components_requested: [servo/mg996r], electronics: generic, notes: "square base" }
+- id: B2-1
+  prompt: "A 3-DOF robot arm with a base yaw joint, a shoulder and an elbow, 200 mm reach, carrying 50 g."
+  spec: { pack: manipulator, dof: 3, reach_mm: 200, payload_g: 50, components_requested: [servo/mg996r], electronics: generic }
+- id: B2-2
+  prompt: "A 3-DOF arm (base yaw, shoulder, elbow), 200 mm reach, 50 g payload, with hollow links that have an open channel for the servo cables."
+  spec: { pack: manipulator, dof: 3, reach_mm: 200, payload_g: 50, components_requested: [servo/mg996r], electronics: generic, notes: "hollow links with cable channel" }
+- id: B2-3
+  prompt: "A 3-DOF arm (base yaw, shoulder, elbow), 200 mm reach, carrying 50 g. Put the electronics bay on the side of the base."
+  spec: { pack: manipulator, dof: 3, reach_mm: 200, payload_g: 50, components_requested: [servo/mg996r], electronics: generic, notes: "electronics bay on the side of the base" }
+- id: B2-4
+  prompt: "A 3-DOF arm (base yaw, shoulder, elbow), 200 mm reach, carrying 50 g, controlled by an ESP32 DevKit and a PCA9685 servo driver housed in the base."
+  spec: { pack: manipulator, dof: 3, reach_mm: 200, payload_g: 50, components_requested: [servo/mg996r], electronics: [electronics/esp32_devkit, electronics/pca9685] }
+- id: B2-5
+  prompt: "A 3-DOF arm with a base yaw, a shoulder and an elbow, 180 mm reach, carrying 80 g."
+  spec: { pack: manipulator, dof: 3, reach_mm: 180, payload_g: 80, components_requested: [servo/mg996r], electronics: generic }
+- id: B2-6
+  prompt: "A 3-DOF desktop arm: base yaw on a turntable with roller bearings, shoulder and elbow links supported on both sides of each servo, 200 mm reach, 50 g payload."
+  spec: { pack: manipulator, dof: 3, reach_mm: 200, payload_g: 50, components_requested: [servo/mg996r], electronics: generic, notes: "turntable with rollers; links supported on both sides" }
+- id: B2-7
+  prompt: "A 3-DOF arm with base yaw, shoulder and elbow, where the upper arm (about 120 mm) is longer than the forearm (about 90 mm), about 210 mm reach, 50 g payload."
+  spec: { pack: manipulator, dof: 3, reach_mm: 210, payload_g: 50, components_requested: [servo/mg996r], electronics: generic, notes: "upper arm ~120 mm, forearm ~90 mm" }
+- id: B2-8
+  prompt: "A 3-DOF arm (base yaw, shoulder, elbow), 200 mm reach, 50 g, standing on a square base no larger than 150 x 150 mm."
+  spec: { pack: manipulator, dof: 3, reach_mm: 200, payload_g: 50, components_requested: [servo/mg996r], electronics: generic, notes: "square base <= 150 x 150 mm" }
+- id: B2-9
+  prompt: "A 3-DOF arm (base yaw, shoulder, elbow) built from flat bar links with rounded ends, 200 mm reach, 50 g payload."
+  spec: { pack: manipulator, dof: 3, reach_mm: 200, payload_g: 50, components_requested: [servo/mg996r], electronics: generic, notes: "flat bar links with rounded ends" }
+- id: B2-10
+  prompt: "A 3-DOF arm with base yaw, shoulder and elbow, 160 mm reach, carrying 50 g, printed in PLA."
+  spec: { pack: manipulator, dof: 3, reach_mm: 160, payload_g: 50, material: PLA, components_requested: [servo/mg996r], electronics: generic }
+- id: B2-11
+  prompt: "A 3-DOF arm (base yaw, shoulder, elbow), 200 mm reach, 50 g payload, controlled by an ESP32 DevKit housed in the base."
+  spec: { pack: manipulator, dof: 3, reach_mm: 200, payload_g: 50, components_requested: [servo/mg996r], electronics: [electronics/esp32_devkit] }
+- id: B2-12
+  prompt: "A 3-DOF arm for picking small objects off the table in front of it: base yaw, shoulder and elbow, 200 mm reach, 50 g."
+  spec: { pack: manipulator, dof: 3, reach_mm: 200, payload_g: 50, components_requested: [servo/mg996r], electronics: generic, notes: "picks objects from the table surface" }
